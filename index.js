@@ -90,6 +90,8 @@ app.use((req, res, next) => {
 // CORS configuration
 const allowedOrigins = [
   'https://sabrang.jklu.edu.in',
+  'https://spardha.jklu.edu.in',
+  'https://www.spardha.jklu.edu.in',
   'http://localhost:3000',
   'http://localhost:3001',
   'https://localhost:3000',
