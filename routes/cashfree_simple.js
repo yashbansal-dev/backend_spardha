@@ -247,17 +247,35 @@ router.post('/create-order', async (req, res) => {
         for (const item of items) {
             // Identify event by name/title
             const eventName = item.title || item.itemName || item.name;
+            const category = item.category;
 
             if (!eventName) {
                 console.warn('⚠️ Item missing name/title:', item);
                 continue;
             }
 
-            // Find event in DB to get real price
-            const event = await Event.findOne({ name: eventName });
+            // Smart Lookup: Try specific variant first, then generic
+            let event = null;
+            let lookupName = eventName;
+
+            // 1. Try "Event Name (Category)" e.g., "Football (Boys)"
+            if (category && category !== 'Open') {
+                const catFormatted = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+                const specificName = `${eventName} (${catFormatted})`;
+
+                event = await Event.findOne({ name: specificName });
+                if (event) {
+                    lookupName = specificName;
+                }
+            }
+
+            // 2. Fallback to generic "Event Name"
+            if (!event) {
+                event = await Event.findOne({ name: eventName });
+            }
 
             if (!event) {
-                console.error(`❌ Event not found in DB: "${eventName}"`);
+                console.error(`❌ Event not found in DB: "${eventName}" (checked variant: "${lookupName}")`);
                 missingEvents.push(eventName);
                 continue;
             }
