@@ -363,6 +363,10 @@ router.post('/create-order', async (req, res) => {
         // ---------------------------------------------------------
         // 3. INITIATE PAYMENT: Call Cashfree
         // ---------------------------------------------------------
+        // Sanitize Phone Number (Extract last 10 digits)
+        const rawPhone = String(customerPhone || "9999999999").replace(/\D/g, '');
+        const cleanPhone = rawPhone.length > 10 ? rawPhone.slice(-10) : rawPhone;
+
         const orderRequest = {
             order_amount: totalAmount,
             order_currency: "INR",
@@ -371,7 +375,7 @@ router.post('/create-order', async (req, res) => {
                 customer_id: `cust_${Date.now()}`,
                 customer_name: customerName || "Customer",
                 customer_email: customerEmail,
-                customer_phone: customerPhone || "9999999999"
+                customer_phone: cleanPhone
             },
             order_meta: {
                 return_url: `${req.protocol}://${req.get('host')}/payment/success?order_id=${orderId}`
@@ -395,21 +399,18 @@ router.post('/create-order', async (req, res) => {
             console.log('✅ Cashfree Session Created:', response.data.payment_session_id);
 
         } catch (cfError) {
-            console.error('❌ Costfree Init Failed:', cfError.message);
+            const errorMsg = cfError.response?.data?.message || cfError.message;
+            console.error('❌ Costfree Init Failed:', errorMsg);
 
             // Mark DB as failed so we don't have infinite pending orders
             newPurchase.paymentStatus = 'failed';
-            newPurchase.registrationError = cfError.message;
+            newPurchase.registrationError = errorMsg;
             await newPurchase.save();
-
-            // Handle specific errors like logic below (omitted for brevity but safely caught here)
-            // Retry logic removed for clarity/security, but could be re-added if strictly needed. 
-            // For now, simpler is safer/more robust.
 
             return res.status(502).json({
                 success: false,
-                message: 'Payment Gateway Error. Please try again.',
-                error: cfError.response?.data?.message || cfError.message
+                message: `Payment Gateway Error: ${errorMsg}`, // Expose real error to user
+                error: errorMsg
             });
         }
 
