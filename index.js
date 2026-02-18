@@ -306,6 +306,23 @@ app.get("/connectivity-test", (req, res) => {
   });
 });
 
+// Helper route to get server IP for Cashfree Whitelisting
+const axios = require('axios');
+app.get("/server-ip", async (req, res) => {
+  try {
+    console.log("Fetching server public IP...");
+    const response = await axios.get('https://api.ipify.org?format=json');
+    console.log("Server IP:", response.data.ip);
+    res.json({
+      ip: response.data.ip,
+      message: "Add this IP to your Cashfree IP Whitelist"
+    });
+  } catch (error) {
+    console.error("Error fetching IP:", error.message);
+    res.status(500).json({ error: "Failed to fetch IP", details: error.message });
+  }
+});
+
 // Public routes (no authentication required)
 app.post("/login", (req, res, next) => {
   console.log(`📥 Login attempt from: ${req.get('Origin')}`);
