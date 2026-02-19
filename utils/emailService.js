@@ -27,9 +27,9 @@ function generateRegistrationEmailContent(userData) {
             event !== 'Demo Payment' &&
             event !== 'Demo Event'
         );
-        eventsText = validEvents.length > 0 ? validEvents.join(', ') : 'General Registration - Sabrang\'25';
+        eventsText = validEvents.length > 0 ? validEvents.join(', ') : 'General Registration - Spardha\'26';
     } else {
-        eventsText = 'General Registration - Sabrang\'25';
+        eventsText = 'General Registration - Spardha\'26';
     }
 
     console.log(`📧 Email content generation: input events=${JSON.stringify(events)}, final eventsText="${eventsText}"`);
@@ -121,14 +121,13 @@ function generateRegistrationEmailContent(userData) {
     <body>
         <div class="container">
             <div class="header">
-                <h1>🎉 Welcome to Sabrang'25!</h1>
-                <p>Thanks for registering — you're officially part of the fest where the unseen comes to life.</p>
+                <h1>🎉 Welcome to Spardha'26!</h1>
             </div>
             
             <div class="content">
                 <h2>Registration Confirmed!</h2>
-                <p>Hi <strong>${name}</strong>,</p>
-                <p>We're thrilled to have you join us for <strong>Sabrang'25</strong> — a three-day celebration of talent, creativity, and unforgettable vibes at JKLU, Jaipur.</p>
+                <p>Hii <strong>${name}</strong>,</p>
+                <p>Registration confirmed for <strong>Spardha'26</strong>.</p>
                 
                 <div class="details">
                     <h3>Your Registration Details:</h3>
@@ -144,13 +143,11 @@ function generateRegistrationEmailContent(userData) {
                     <p><strong>Your QR code is attached to this email as an image!</strong></p>
                     <p>Please save the attached QR code image and show it at the entry gate for quick access.</p>
                     <p style="margin-top: 15px;">You can also access your ticket online:</p>
-                    <a href="https://sabrang.jklu.edu.in/ticket" class="ticket-button">View Ticket Online</a>
+                    <a href="https://spardha.jklu.edu.in/ticket" class="ticket-button">View Ticket Online</a>
                 </div>
                 
                 <div class="footer">
-                    <p><strong>🎊 We can't wait to see you bring your energy, your talent, and your vibe to Sabrang'25.</strong></p>
-                    
-                    <p><strong>—<br>Team Sabrang'25<br>✨ Witness the Unseen</strong></p>
+                    <p><strong>—<br>Team Spardha'26</strong></p>
                     
                     <p>Need help or have a question? Reach out to us anytime.</p>
                 </div>
@@ -161,13 +158,12 @@ function generateRegistrationEmailContent(userData) {
     `;
 
     const textContent = `
-🎉 Welcome to Sabrang'25!
-Thanks for registering — you're officially part of the fest where the unseen comes to life.
+🎉 Welcome to Spardha'26!
 
 Registration Confirmed!
-Hi ${name},
+Hii ${name},
 
-We're thrilled to have you join us for Sabrang'25 — a three-day celebration of talent, creativity, and unforgettable vibes at JKLU, Jaipur.
+Registration confirmed for Spardha'26.
 
 Your Registration Details:
 Name: ${name}
@@ -179,13 +175,10 @@ Your Entry Ticket:
 Your QR code is attached to this email as an image!
 Please save the attached QR code image and show it at the entry gate for quick access.
 
-You can also access your ticket online: https://sabrang.jklu.edu.in/ticket
-
-🎊 We can't wait to see you bring your energy, your talent, and your vibe to Sabrang'25.
+You can also access your ticket online: https://spardha.jklu.edu.in/ticket
 
 —
-Team Sabrang'25
-✨ Witness the Unseen
+Team Spardha'26
 
 Need help or have a question? Reach out to us anytime.
     `;
@@ -205,9 +198,9 @@ async function sendRegistrationEmail(userEmail, userData) {
         const { htmlContent, textContent } = generateRegistrationEmailContent(userData);
 
         const mailOptions = {
-            from: `"Sabrang'25 Team" <${process.env.EMAIL_USER}>`,
+            from: `"Spardha'26 Team" <${process.env.EMAIL_USER}>`,
             to: userEmail,
-            subject: '🎉 Registration Confirmed - Sabrang\'25',
+            subject: '🎉 Welcome to Spardha\'26 - Registration Confirmed',
             text: textContent,
             html: htmlContent,
             attachments: []
@@ -217,7 +210,7 @@ async function sendRegistrationEmail(userEmail, userData) {
         if (userData.qrCodeBase64) {
             console.log(`📎 Adding QR code attachment for ${userEmail}`);
             mailOptions.attachments.push({
-                filename: `sabrang25-ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
+                filename: `spardha26-ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
                 content: Buffer.from(userData.qrCodeBase64, 'base64'),
                 contentType: "image/png"
             });
@@ -252,7 +245,7 @@ function generatePaymentInitiationEmailContent(paymentData) {
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>🔐 Your Sabrang'25 Ticket Access OTP</title>
+            <title>🔐 Your Spardha'26 Ticket Access OTP</title>
             <style>
                 body { 
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
@@ -336,11 +329,11 @@ function generatePaymentInitiationEmailContent(paymentData) {
             <div class="container">
                 <div class="header">
                     <h1>🔐 Ticket Access OTP</h1>
-                    <p>Your secure access code for Sabrang'25 tickets</p>
+                    <p>Your secure access code for Spardha'26 tickets</p>
                 </div>
                 <div class="content">
                     <h2>Hello <strong>${name}</strong>,</h2>
-                    <p>You've requested access to view your Sabrang'25 tickets. Please use the following OTP to verify your identity:</p>
+                    <p>You've requested access to view your Spardha'26 tickets. Please use the following OTP to verify your identity:</p>
                     
                     <div class="otp-section">
                         <h3>Your OTP Code:</h3>
@@ -359,7 +352,7 @@ function generatePaymentInitiationEmailContent(paymentData) {
                     </div>
                     
                     <div class="footer">
-                        <p><strong>—<br>Team Sabrang'25<br>✨ Witness the Unseen</strong></p>
+                        <p><strong>—<br>Team Spardha'26</strong></p>
                         <p>Need help? Contact us anytime.</p>
                     </div>
                 </div>
@@ -368,11 +361,11 @@ function generatePaymentInitiationEmailContent(paymentData) {
         </html>`;
 
         const textContent = `
-🔐 Ticket Access OTP - Sabrang'25
+🔐 Ticket Access OTP - Spardha'26
 
 Hello ${name},
 
-You've requested access to view your Sabrang'25 tickets. Please use the following OTP to verify your identity:
+You've requested access to view your Spardha'26 tickets. Please use the following OTP to verify your identity:
 
 
 
@@ -387,8 +380,7 @@ Security Notice:
 - If you didn't request this, please ignore this email
 
 —
-Team Sabrang'25
-✨ Witness the Unseen
+Team Spardha'26
 
 Need help? Contact us anytime.`;
 
@@ -404,9 +396,9 @@ Need help? Contact us anytime.`;
                 event !== 'Demo Payment' &&
                 event !== 'Demo Event'
             );
-            eventsText = validEvents.length > 0 ? validEvents.join(', ') : 'General Registration - Sabrang\'25';
+            eventsText = validEvents.length > 0 ? validEvents.join(', ') : 'General Registration - Spardha\'26';
         } else {
-            eventsText = 'General Registration - Sabrang\'25';
+            eventsText = 'General Registration - Spardha\'26';
         }
 
         console.log(`📧 Payment initiation email: input events=${JSON.stringify(events)}, final eventsText="${eventsText}"`);
@@ -417,7 +409,7 @@ Need help? Contact us anytime.`;
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>🎉 Welcome to Sabrang'25!</title>
+            <title>🎉 Welcome to Spardha'26!</title>
             <style>
                 body { 
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
@@ -498,13 +490,12 @@ Need help? Contact us anytime.`;
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>🎉 Welcome to Sabrang'25!</h1>
-                    <p>Thanks for registering — you're officially part of the fest where the unseen comes to life.</p>
+                    <h1>🎉 Welcome to Spardha'26!</h1>
                 </div>
                 <div class="content">
                     <h2>Registration Confirmed!</h2>
                     <p><strong>Hi ${name},</strong></p>
-                    <p>We're thrilled to have you join us for Sabrang'25 — a three-day celebration of talent, creativity, and unforgettable vibes at JKLU, Jaipur.</p>
+                    <p>Registration confirmed for Spardha'26.</p>
                     
                     <div class="order-details">
                         <h3>Your Registration Details:</h3>
@@ -520,13 +511,11 @@ Need help? Contact us anytime.`;
                         <p><strong>Your QR code is attached to this email as an image!</strong></p>
                         <p>Please save the attached QR code image and show it at the entry gate for quick access.</p>
                         <p style="margin-top: 15px;">You can also access your ticket online:</p>
-                        <a href="https://sabrang.jklu.edu.in/ticket" class="ticket-button">View Ticket Online</a>
+                        <a href="https://spardha.jklu.edu.in/ticket" class="ticket-button">View Ticket Online</a>
                     </div>
                     
                     <div class="footer">
-                        <p><strong>🎊 We can't wait to see you bring your energy, your talent, and your vibe to Sabrang'25.</strong></p>
-                        
-                        <p><strong>—<br>Team Sabrang'25<br>✨ Witness the Unseen</strong></p>
+                        <p><strong>—<br>Team Spardha'26</strong></p>
                         
                         <p>Need help or have a question? Reach out to us anytime.</p>
                     </div>
@@ -536,13 +525,12 @@ Need help? Contact us anytime.`;
         </html>`;
 
         const textContent = `
-🎉 Welcome to Sabrang'25!
-Thanks for registering — you're officially part of the fest where the unseen comes to life.
+🎉 Welcome to Spardha'26!
 
 Registration Confirmed!
 Hi ${name},
 
-We're thrilled to have you join us for Sabrang'25 — a three-day celebration of talent, creativity, and unforgettable vibes at JKLU, Jaipur.
+Registration confirmed for Spardha'26.
 
 Your Registration Details:
 Name: ${name}
@@ -554,13 +542,10 @@ Your Entry Ticket:
 Your QR code is attached to this email as an image!
 Please save the attached QR code image and show it at the entry gate for quick access.
 
-You can also access your ticket online: https://sabrang.jklu.edu.in/ticket
-
-🎊 We can't wait to see you bring your energy, your talent, and your vibe to Sabrang'25.
+You can also access your ticket online: https://spardha.jklu.edu.in/ticket
 
 —
-Team Sabrang'25
-✨ Witness the Unseen
+Team Spardha'26
 
 Need help or have a question? Reach out to us anytime.`;
 
@@ -582,9 +567,9 @@ async function sendPaymentInitiatedEmail(paymentData) {
         const { htmlContent, textContent } = generatePaymentInitiationEmailContent(paymentData);
 
         const mailOptions = {
-            from: `"Sabrang'25 Team" <${process.env.EMAIL_USER}>`,
+            from: `"Spardha'26 Team" <${process.env.EMAIL_USER}>`,
             to: userEmail,
-            subject: otp ? '🔐 Your Sabrang\'25 Ticket Access OTP' : '🎉 Welcome to Sabrang\'25! Registration Confirmed',
+            subject: otp ? '🔐 Your Spardha\'26 Ticket Access OTP' : '🎉 Welcome to Spardha\'26 - Registration Confirmed',
             text: textContent,
             html: htmlContent,
             attachments: []
@@ -594,7 +579,7 @@ async function sendPaymentInitiatedEmail(paymentData) {
         if (!otp && paymentData.qrCodeBase64) {
             console.log(`📎 Adding QR code attachment for ${userEmail}`);
             mailOptions.attachments.push({
-                filename: `sabrang25-ticket-${paymentData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
+                filename: `spardha26-ticket-${paymentData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
                 content: Buffer.from(paymentData.qrCodeBase64, 'base64'),
                 contentType: "image/png"
             });
