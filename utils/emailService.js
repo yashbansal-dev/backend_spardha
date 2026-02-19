@@ -1,113 +1,28 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
-const axios = require('axios');
 
-class MicrosoftOAuthMailer {
-    constructor(config) {
-        this.clientId = config.clientId;
-        this.clientSecret = config.clientSecret;
-        this.tenantId = config.tenantId;
-        this.userEmail = config.userEmail;
-        this.accessToken = null;
+// Create reusable transporter object using the default SMTP transport
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
     }
-
-    /**
-     * Get OAuth2 access token from Microsoft
-     */
-    async getAccessToken() {
-        const tokenUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
-        
-        const params = new URLSearchParams();
-        params.append('client_id', this.clientId);
-        params.append('client_secret', this.clientSecret);
-        params.append('scope', process.env.OAUTH_SCOPE || 'https://graph.microsoft.com/.default');
-        params.append('grant_type', 'client_credentials');
-
-        try {
-            const response = await axios.post(tokenUrl, params, {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                // Force IPv4 to avoid IPv6 connectivity issues
-                family: 4
-            });
-
-            this.accessToken = response.data.access_token;
-            console.log('✅ Access token obtained successfully');
-            return this.accessToken;
-        } catch (error) {
-            console.error('❌ Error getting access token:', error.response?.data || error.message);
-            throw error;
-        }
-    }
-
-    /**
-     * Send email using Microsoft Graph API
-     */
-    async sendEmailGraph(mailOptions) {
-        try {
-            // Get fresh access token
-            await this.getAccessToken();
-
-            const graphUrl = `https://graph.microsoft.com/v1.0/users/${this.userEmail}/sendMail`;
-
-            const emailPayload = {
-                message: {
-                    subject: mailOptions.subject,
-                    body: {
-                        contentType: mailOptions.html ? 'HTML' : 'Text',
-                        content: mailOptions.html || mailOptions.text
-                    },
-                    toRecipients: Array.isArray(mailOptions.to) 
-                        ? mailOptions.to.map(email => ({ emailAddress: { address: email } }))
-                        : [{ emailAddress: { address: mailOptions.to } }],
-                    ccRecipients: mailOptions.cc 
-                        ? (Array.isArray(mailOptions.cc) 
-                            ? mailOptions.cc.map(email => ({ emailAddress: { address: email } }))
-                            : [{ emailAddress: { address: mailOptions.cc } }])
-                        : [],
-                    bccRecipients: mailOptions.bcc 
-                        ? (Array.isArray(mailOptions.bcc) 
-                            ? mailOptions.bcc.map(email => ({ emailAddress: { address: email } }))
-                            : [{ emailAddress: { address: mailOptions.bcc } }])
-                        : [],
-                    attachments: mailOptions.attachments || []
-                }
-            };
-
-            console.log('📧 Sending email via Graph API...');
-            const response = await axios.post(graphUrl, emailPayload, {
-                headers: {
-                    'Authorization': `Bearer ${this.accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                // Force IPv4 to avoid IPv6 connectivity issues
-                family: 4
-            });
-
-            console.log('✅ Email sent successfully via Graph API');
-            return response.data;
-
-        } catch (error) {
-            console.error('❌ Graph API Error:', error.response?.data || error.message);
-            throw error;
-        }
-    }
-}
+});
 
 /**
  * Generate registration email content
  */
 function generateRegistrationEmailContent(userData) {
     const { name, events } = userData;
-    
+
     // Better handling of events data - check for valid array with content
     let eventsText;
     if (Array.isArray(events) && events.length > 0) {
         // Filter out any empty, invalid, or generic event names
-        const validEvents = events.filter(event => 
-            event && 
-            typeof event === 'string' && 
+        const validEvents = events.filter(event =>
+            event &&
+            typeof event === 'string' &&
             event.trim().length > 0 &&
             event !== 'Demo Payment' &&
             event !== 'Demo Event'
@@ -116,7 +31,7 @@ function generateRegistrationEmailContent(userData) {
     } else {
         eventsText = 'General Registration - Sabrang\'25';
     }
-    
+
     console.log(`📧 Email content generation: input events=${JSON.stringify(events)}, final eventsText="${eventsText}"`);
 
     const htmlContent = `
@@ -283,26 +198,14 @@ Need help or have a question? Reach out to us anytime.
  */
 async function sendRegistrationEmail(userEmail, userData) {
     try {
-        // Configuration from environment variables
-        const config = {
-            clientId: process.env.CLIENT_ID,
-            clientSecret: process.env.CLIENT_SECRET,
-            tenantId: process.env.TENANT_ID,
-            userEmail: process.env.FROM_EMAIL
-        };
-
-        // Validate required environment variables
-        const requiredEnvVars = ['CLIENT_ID', 'CLIENT_SECRET', 'TENANT_ID', 'FROM_EMAIL'];
-        const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-        
-        if (missingVars.length > 0) {
-            throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            throw new Error("Missing EMAIL_USER or EMAIL_PASS in environment variables");
         }
 
-        const mailer = new MicrosoftOAuthMailer(config);
         const { htmlContent, textContent } = generateRegistrationEmailContent(userData);
 
         const mailOptions = {
+            from: `"Sabrang'25 Team" <${process.env.EMAIL_USER}>`,
             to: userEmail,
             subject: '🎉 Registration Confirmed - Sabrang\'25',
             text: textContent,
@@ -314,19 +217,18 @@ async function sendRegistrationEmail(userEmail, userData) {
         if (userData.qrCodeBase64) {
             console.log(`📎 Adding QR code attachment for ${userEmail}`);
             mailOptions.attachments.push({
-                "@odata.type": "#microsoft.graph.fileAttachment",
-                name: `sabrang25-ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
-                contentType: "image/png",
-                contentBytes: userData.qrCodeBase64
+                filename: `sabrang25-ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
+                content: Buffer.from(userData.qrCodeBase64, 'base64'),
+                contentType: "image/png"
             });
             console.log(`✅ QR code attachment added for ${userEmail}`);
         } else {
             console.log(`⚠️ No QR code available for attachment to ${userEmail}`);
         }
 
-        const result = await mailer.sendEmailGraph(mailOptions);
-        console.log(`✅ Registration email sent successfully to ${userEmail} with ${mailOptions.attachments.length} attachments`);
-        return { success: true, result };
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ Registration email sent successfully to ${userEmail}. Message ID: ${info.messageId}`);
+        return { success: true, result: info };
 
     } catch (error) {
         console.error(`❌ Failed to send registration email to ${userEmail}:`, error.message);
@@ -339,7 +241,7 @@ async function sendRegistrationEmail(userEmail, userData) {
  */
 function generatePaymentInitiationEmailContent(paymentData) {
     const { name, otp, events } = paymentData;
-    
+
     // If OTP is provided, send OTP email, otherwise send registration email
     if (otp) {
         // OTP emails are focused on authentication only - no event information needed
@@ -440,8 +342,6 @@ function generatePaymentInitiationEmailContent(paymentData) {
                     <h2>Hello <strong>${name}</strong>,</h2>
                     <p>You've requested access to view your Sabrang'25 tickets. Please use the following OTP to verify your identity:</p>
                     
-
-                    
                     <div class="otp-section">
                         <h3>Your OTP Code:</h3>
                         <div class="otp-code">${otp}</div>
@@ -497,9 +397,9 @@ Need help? Contact us anytime.`;
         // Original registration email content - better events handling
         let eventsText;
         if (Array.isArray(events) && events.length > 0) {
-            const validEvents = events.filter(event => 
-                event && 
-                typeof event === 'string' && 
+            const validEvents = events.filter(event =>
+                event &&
+                typeof event === 'string' &&
                 event.trim().length > 0 &&
                 event !== 'Demo Payment' &&
                 event !== 'Demo Event'
@@ -508,7 +408,7 @@ Need help? Contact us anytime.`;
         } else {
             eventsText = 'General Registration - Sabrang\'25';
         }
-        
+
         console.log(`📧 Payment initiation email: input events=${JSON.stringify(events)}, final eventsText="${eventsText}"`);
 
         const htmlContent = `
@@ -673,29 +573,16 @@ Need help or have a question? Reach out to us anytime.`;
  */
 async function sendPaymentInitiatedEmail(paymentData) {
     const { email: userEmail, otp } = paymentData;
-    
-    try {
-        // Use the same configuration pattern as the working test-email.js
-        const config = {
-            clientId: process.env.CLIENT_ID,
-            clientSecret: process.env.CLIENT_SECRET,
-            tenantId: process.env.TENANT_ID,
-            userEmail: process.env.FROM_EMAIL
-        };
 
-        // Validate required environment variables (same as test-email.js)
-        const requiredEnvVars = ['CLIENT_ID', 'CLIENT_SECRET', 'TENANT_ID', 'FROM_EMAIL'];
-        const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-        
-        if (missingVars.length > 0) {
-            throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+    try {
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            throw new Error("Missing EMAIL_USER or EMAIL_PASS in environment variables");
         }
 
-        // Use the same mailer pattern as test-email.js
-        const mailer = new MicrosoftOAuthMailer(config);
         const { htmlContent, textContent } = generatePaymentInitiationEmailContent(paymentData);
 
         const mailOptions = {
+            from: `"Sabrang'25 Team" <${process.env.EMAIL_USER}>`,
             to: userEmail,
             subject: otp ? '🔐 Your Sabrang\'25 Ticket Access OTP' : '🎉 Welcome to Sabrang\'25! Registration Confirmed',
             text: textContent,
@@ -707,18 +594,16 @@ async function sendPaymentInitiatedEmail(paymentData) {
         if (!otp && paymentData.qrCodeBase64) {
             console.log(`📎 Adding QR code attachment for ${userEmail}`);
             mailOptions.attachments.push({
-                "@odata.type": "#microsoft.graph.fileAttachment",
-                name: `sabrang25-ticket-${paymentData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
-                contentType: "image/png",
-                contentBytes: paymentData.qrCodeBase64
+                filename: `sabrang25-ticket-${paymentData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
+                content: Buffer.from(paymentData.qrCodeBase64, 'base64'),
+                contentType: "image/png"
             });
             console.log(`✅ QR code attachment added for ${userEmail}`);
         }
 
-        // Use the same sending method as test-email.js
-        const result = await mailer.sendEmailGraph(mailOptions);
-        console.log(`✅ ${otp ? 'OTP' : 'Payment initiation'} email sent successfully to ${userEmail}`);
-        return { success: true, result };
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ ${otp ? 'OTP' : 'Payment initiation'} email sent successfully to ${userEmail}. Message ID: ${info.messageId}`);
+        return { success: true, result: info };
 
     } catch (error) {
         console.error(`❌ Failed to send ${otp ? 'OTP' : 'payment initiation'} email to ${userEmail}:`, error.message);
@@ -727,7 +612,6 @@ async function sendPaymentInitiatedEmail(paymentData) {
 }
 
 module.exports = {
-    MicrosoftOAuthMailer,
     generateRegistrationEmailContent,
     sendRegistrationEmail,
     generatePaymentInitiationEmailContent,
