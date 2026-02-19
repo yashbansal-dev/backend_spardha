@@ -9,21 +9,30 @@ const bcrypt = require("bcrypt");
 async function login(req, res) {
   try {
     const user = await User.findOne({ email: req.body.email });
-    
+
     if (!user) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        message: 'Invalid credentials' 
+        message: 'Invalid credentials'
+      });
+    }
+
+    // Verify password exists (critical check)
+    if (!user.password) {
+      console.error(`Login failed: User ${user.email} has no password set.`);
+      return res.status(401).json({
+        success: false,
+        message: 'Account has no password. Please contact support to reset it.'
       });
     }
 
     // Compare the provided password with the hashed password
     const isPasswordValid = await bcrypt.compare(req.body.password, user.password);
-    
+
     if (!isPasswordValid) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        message: 'Invalid credentials' 
+        message: 'Invalid credentials'
       });
     }
 
@@ -31,7 +40,7 @@ async function login(req, res) {
       _id: user._id,
       email: user.email,
       referral: user.referalID
-    }, process.env.jwtkey);
+    }, process.env.jwtkey || 'secretkey'); // Fallback key to prevent crash
 
     res.cookie("jwt", token, {
       httpOnly: true,
@@ -49,7 +58,7 @@ async function login(req, res) {
     console.error('Login Error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: `Login failed: ${error.message}` // Expose error for debugging
     });
   }
 }
@@ -100,12 +109,12 @@ async function signup(req, res) {
         name: newUser.name,
         email: newUser.email
       });
-      
+
       newUser.qrCode = `${newUser._id}`; // Keep for backward compatibility
       newUser.qrPath = `${newUser._id}`; // Keep for backward compatibility
       newUser.qrCodeBase64 = qrCodeBase64;
       await newUser.save();
-      
+
       console.log(`✅ QR code generated as base64 for new user: ${newUser._id}`);
     } catch (qrError) {
       console.error('❌ QR code generation failed for new user:', qrError);
@@ -172,4 +181,4 @@ async function register(req, res) {
   }
 }
 
-module.exports = { login, signup, logout,register };
+module.exports = { login, signup, logout, register };

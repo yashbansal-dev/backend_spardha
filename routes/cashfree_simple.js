@@ -730,8 +730,16 @@ router.get('/success/:orderId', async (req, res) => {
             // Generate QR codes for ALL users associated with this purchase
             console.log('🔄 Starting QR code generation for all users in this purchase...');
 
-            // Step 1: Generate QR code for main person (team leader)
-            let user = await User.findOne({ email: purchase.userDetails.email });
+            // Step 1: Find main user — use userId first (more reliable), fallback to email
+            let user = null;
+            if (purchase.userId) {
+                user = await User.findById(purchase.userId);
+                if (user) console.log(`👤 Found user by userId: ${user.email}`);
+            }
+            if (!user && purchase.userDetails?.email) {
+                user = await User.findOne({ email: purchase.userDetails.email });
+                if (user) console.log(`👤 Found user by email: ${user.email}`);
+            }
 
             // Extract event names from purchase items
             const eventNames = purchase.items.map(item => item.itemName).filter(name => name && name !== 'Demo Payment');
