@@ -378,7 +378,8 @@ router.post('/create-order', async (req, res) => {
                 customer_phone: cleanPhone
             },
             order_meta: {
-                return_url: `${req.protocol}://${req.get('host')}/payment/success?order_id=${orderId}`
+                // FORCE return to frontend URL to avoid any environment variable ambiguity
+                return_url: `https://spardha.jklu.edu.in/payment/success?order_id=${orderId}`
             }
         };
 

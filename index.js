@@ -465,6 +465,14 @@ app.use("/api/payments", paymentRouter);
 
 
 
+// Fallback for payment success if the gateway redirects to backend instead of frontend
+app.get('/payment/success', (req, res) => {
+  const orderId = req.query.order_id;
+  const frontendUrl = 'https://spardha.jklu.edu.in';
+  console.log(`🔀 Redirecting payment success to frontend: ${frontendUrl}/payment/success?order_id=${orderId}`);
+  res.redirect(`${frontendUrl}/payment/success?order_id=${orderId}`);
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
