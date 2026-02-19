@@ -23,46 +23,23 @@ app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB with better error handling
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { generalLimiter, authLimiter } = require('./middleware/rateLimiter');
 
-// Connect to MongoDB with better error handling and in-memory fallback
-const connectDB = async () => {
-  try {
-    const mongoUri = process.env.mongodb || 'mongodb://localhost:27017/spardha';
-    console.log(`🔌 Attempting to connect to MongoDB at ${mongoUri}...`);
-
-    await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-    console.log("✅ Database Connected Successfully (Local/Cloud)");
-  } catch (err) {
-    console.error("❌ MongoDB Connection Error:", err.message);
-
-    // Fallback to In-Memory Database
-    console.log("⚠️ Falling back to In-Memory Database for testing...");
-    try {
-      const mongod = await MongoMemoryServer.create();
-      const uri = mongod.getUri();
-      await mongoose.connect(uri);
-      console.log(`✅ In-Memory Database Connected Successfully at ${uri}`);
-      console.log("📝 Note: Data will be lost when the server restarts.");
-    } catch (memErr) {
-      console.error("❌ In-Memory Database Error:", memErr);
-    }
-  }
-};
-
-// Connect to database
-connectDB();
+// Connect to MongoDB
+mongoose.connect(process.env.mongodb).then(() => {
+  console.log("Connected to MongoDB");
+}).catch((err) => {
+  console.log("Error connecting to MongoDB", err);
+});
 
 // Middleware
-app.use((req, res, next) => {
-  console.log(`DEBUG REQUEST: ${req.method} ${req.path}`);
-  next();
-});
-app.use(cookieparser());
+app.use(cors());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Apply General Rate Limiter to all requests
+app.use(generalLimiter);
+
 
 // Add request timeout middleware to prevent hanging requests
 app.use((req, res, next) => {
@@ -157,6 +134,7 @@ app.use(cors({
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieparser());
 
 // Serve static files from public directory
 app.use('/public', express.static(path.join(__dirname, 'public')));
@@ -445,7 +423,8 @@ app.post("/register", upload.any(), async (req, res) => {
 
 
 // Protected routes (authentication required)
-app.use("/api", apirouter);
+// Apply stricter rate limits to sensitive routes if needed (e.g., auth routes)
+app.use("/api", apirouter); // This might be the auth router, or a general API router
 app.use("/admin", adminrouter);
 
 // Payment routes

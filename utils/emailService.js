@@ -14,7 +14,7 @@ const transporter = nodemailer.createTransport({
  * Generate registration email content
  */
 function generateRegistrationEmailContent(userData) {
-    const { name, events } = userData;
+    const { name, events, orderId } = userData;
 
     // Better handling of events data - check for valid array with content
     let eventsText;
@@ -34,122 +34,125 @@ function generateRegistrationEmailContent(userData) {
 
     console.log(`📧 Email content generation: input events=${JSON.stringify(events)}, final eventsText="${eventsText}"`);
 
+    const ticketLink = orderId ? `https://spardha.jklu.edu.in/payment/success?order_id=${orderId}` : 'https://spardha.jklu.edu.in/ticket';
+
     const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
         <style>
             body { 
-                font-family: Arial, sans-serif; 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
                 line-height: 1.6; 
                 color: #ffffff; 
                 margin: 0; 
                 padding: 0; 
-                background-color: #1e3a8a;
+                background-color: #020617; /* Spardha Dark BG */
             }
             .container { 
                 max-width: 600px; 
                 margin: 0 auto; 
-                padding: 20px; 
-                background-color: #1e3a8a;
+                background-color: #0f172a; /* Slightly lighter dark for card */
+                border-radius: 12px; 
+                overflow: hidden; 
+                border: 1px solid #334155;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             }
             .header { 
-                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); 
+                background: linear-gradient(135deg, #E37233 0%, #d97706 100%); /* Spardha Orange Gradient */
                 color: white; 
                 padding: 30px; 
                 text-align: center; 
-                border-radius: 10px 10px 0 0; 
-                border: 2px solid #60a5fa;
             }
             .content { 
-                background-color: #2563eb; 
-                color: #ffffff; 
                 padding: 30px; 
-                border-radius: 0 0 10px 10px; 
-                border: 2px solid #60a5fa; 
-                border-top: none;
+                background-color: #0f172a; 
+                color: #e2e8f0;
             }
             .details { 
-                background-color: #1d4ed8; 
-                color: #ffffff; 
+                background-color: #1e293b; 
+                color: #f8fafc; 
                 padding: 20px; 
                 margin: 20px 0; 
                 border-radius: 8px; 
-                border: 2px solid #60a5fa;
+                border-left: 4px solid #E37233; /* Orange Accent */
             }
             .ticket-section { 
                 text-align: center; 
-                margin: 20px 0; 
-                background-color: #1e40af; 
-                padding: 20px; 
-                border-radius: 8px; 
-                border: 2px solid #60a5fa;
+                margin: 25px 0; 
+                background-color: #1e293b; 
+                padding: 25px; 
+                border-radius: 12px; 
+                border: 1px solid #334155;
             }
             .ticket-button { 
                 display: inline-block; 
-                background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); 
-                color: #1e3a8a; 
-                padding: 15px 30px; 
+                background: linear-gradient(135deg, #E37233 0%, #F2995C 100%); 
+                color: #ffffff; 
+                padding: 15px 35px; 
                 text-decoration: none; 
-                border-radius: 25px; 
+                border-radius: 30px; 
                 font-weight: bold; 
-                margin: 10px 0;
-                border: 2px solid #fcd34d;
+                margin: 15px 0;
+                box-shadow: 0 4px 15px rgba(227, 114, 51, 0.4); /* Orange Glow */
+                text-transform: uppercase;
+                letter-spacing: 1px;
             }
             .footer { 
                 text-align: center; 
                 margin-top: 30px; 
-                color: #e0e7ff; 
-                background-color: #1e40af; 
+                color: #94a3b8; 
+                background-color: #020617; 
                 padding: 20px; 
-                border-radius: 8px; 
-                border: 2px solid #60a5fa;
+                font-size: 14px;
             }
             .events-list { 
-                background-color: #3730a3; 
-                color: #ffffff; 
+                background-color: #020617; /* Darker nested bg */
+                color: #fbbf24; /* Amber text for events */
                 padding: 15px; 
-                border-left: 4px solid #fbbf24; 
-                margin: 10px 0; 
-                border-radius: 5px;
+                border-radius: 6px;
+                margin-top: 10px;
+                font-family: monospace;
             }
-            h1, h2, h3 { color: #ffffff; }
-            p { color: #ffffff; }
-            strong { color: #fbbf24; }
+            h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
+            h2 { color: #E37233; margin-top: 0; }
+            h3 { color: #f1f5f9; border-bottom: 2px solid #334155; padding-bottom: 10px; display: inline-block; }
+            p { color: #cbd5e1; }
+            strong { color: #F2995C; }
+            a { color: #E37233; text-decoration: none; }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <h1>🎉 Welcome to Spardha'26!</h1>
+                <h1>🏆 Welcome to Spardha'26!</h1>
             </div>
             
             <div class="content">
                 <h2>Registration Confirmed!</h2>
-                <p>Hii <strong>${name}</strong>,</p>
-                <p>Registration confirmed for <strong>Spardha'26</strong>.</p>
+                <p>Hello <strong>${name}</strong>,</p>
+                <p>You are officially registered for <strong>Spardha'26</strong> - The Annual Sports Fest.</p>
                 
                 <div class="details">
-                    <h3>Your Registration Details:</h3>
+                    <h3>Your Details</h3>
                     <p><strong>Name:</strong> ${name}</p>
                     <div class="events-list">
-                        <strong>Events Registered:</strong><br />
+                        <strong>🏅 Events Registered:</strong><br />
                         ${eventsText}
                     </div>
                 </div>
                 
                 <div class="ticket-section">
-                    <h3>Your Entry Ticket:</h3>
-                    <p><strong>Your QR code is attached to this email as an image!</strong></p>
-                    <p>Please save the attached QR code image and show it at the entry gate for quick access.</p>
-                    <p style="margin-top: 15px;">You can also access your ticket online:</p>
-                    <a href="https://spardha.jklu.edu.in/ticket" class="ticket-button">View Ticket Online</a>
+                    <h3>🎟️ Your Entry Ticket</h3>
+                    <p><strong>Your QR code is attached to this email.</strong></p>
+                    <p>Show this code at the entry gate for instant access.</p>
+                    <p style="margin-top: 20px;">Or view it online:</p>
+                    <a href="${ticketLink}" class="ticket-button">View Ticket</a>
                 </div>
                 
                 <div class="footer">
-                    <p><strong>—<br>Team Spardha'26</strong></p>
-                    
-                    <p>Need help or have a question? Reach out to us anytime.</p>
+                    <p><strong>— Team Spardha'26 —</strong></p>
+                    <p>Need help? Reply to this email.</p>
                 </div>
             </div>
         </div>
@@ -158,29 +161,25 @@ function generateRegistrationEmailContent(userData) {
     `;
 
     const textContent = `
-🎉 Welcome to Spardha'26!
+🏆 Welcome to Spardha'26!
 
 Registration Confirmed!
-Hii ${name},
+Hello ${name},
 
-Registration confirmed for Spardha'26.
+You are officially registered for Spardha'26.
 
-Your Registration Details:
+Your Details:
 Name: ${name}
-
-Events Registered:
-${eventsText}
+Events: ${eventsText}
 
 Your Entry Ticket:
-Your QR code is attached to this email as an image!
-Please save the attached QR code image and show it at the entry gate for quick access.
+Your QR code is attached to this email.
+Please save it and show it at the entry gate.
 
-You can also access your ticket online: https://spardha.jklu.edu.in/ticket
+View Ticket Online: ${ticketLink}
 
 —
 Team Spardha'26
-
-Need help or have a question? Reach out to us anytime.
     `;
 
     return { htmlContent, textContent };
@@ -200,7 +199,7 @@ async function sendRegistrationEmail(userEmail, userData) {
         const mailOptions = {
             from: `"Spardha'26 Team" <${process.env.EMAIL_USER}>`,
             to: userEmail,
-            subject: '🎉 Welcome to Spardha\'26 - Registration Confirmed',
+            subject: '🏆 Welcome to Spardha\'26 - Registration Confirmed',
             text: textContent,
             html: htmlContent,
             attachments: []
@@ -253,107 +252,93 @@ function generatePaymentInitiationEmailContent(paymentData) {
                     color: #ffffff; 
                     margin: 0; 
                     padding: 0; 
-                    background-color: #1e3a8a;
+                    background-color: #020617; /* Spardha BG */
                 }
                 .container { 
                     max-width: 600px; 
                     margin: 0 auto; 
-                    background-color: #1e3a8a; 
-                    border-radius: 10px; 
+                    background-color: #0f172a; 
+                    border-radius: 12px; 
                     overflow: hidden; 
-                    border: 2px solid #60a5fa;
+                    border: 1px solid #334155;
                 }
                 .header { 
-                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); 
+                    background: linear-gradient(135deg, #E37233 0%, #d97706 100%); 
                     color: white; 
                     padding: 30px; 
                     text-align: center; 
                 }
                 .content { 
                     padding: 30px; 
-                    background-color: #2563eb; 
-                    color: #ffffff;
+                    background-color: #0f172a; 
+                    color: #e2e8f0;
                 }
                 .otp-section { 
-                    background-color: #1d4ed8; 
+                    background-color: #1e293b; 
                     padding: 20px; 
                     border-radius: 8px; 
                     margin: 20px 0; 
                     text-align: center; 
-                    border: 2px solid #60a5fa;
+                    border: 1px solid #E37233;
                 }
                 .otp-code { 
                     font-size: 32px; 
                     font-weight: bold; 
-                    color: #fbbf24; 
+                    color: #E37233; 
                     letter-spacing: 5px; 
                     margin: 10px 0; 
-                    background-color: #1e40af; 
+                    background-color: #020617; 
                     padding: 15px; 
                     border-radius: 8px; 
-                    border: 2px solid #fcd34d;
+                    border: 1px dashed #475569;
                 }
                 .footer { 
                     text-align: center; 
                     margin-top: 30px; 
-                    color: #e0e7ff; 
-                    background-color: #1e40af; 
+                    color: #94a3b8; 
+                    background-color: #020617; 
                     padding: 20px; 
-                    border-radius: 8px; 
-                    border: 2px solid #60a5fa;
+                    font-size: 14px;
                 }
                 .warning { 
-                    background-color: #dc2626; 
-                    border: 2px solid #fca5a5; 
-                    color: #ffffff; 
+                    background-color: #450a0a; 
+                    border: 1px solid #f87171; 
+                    color: #fecaca; 
                     padding: 15px; 
                     border-radius: 8px; 
                     margin: 20px 0; 
+                    font-size: 13px;
                 }
-                .events-list { 
-                    background-color: #3730a3; 
-                    color: #ffffff; 
-                    padding: 15px; 
-                    border-left: 4px solid #fbbf24; 
-                    margin: 20px 0; 
-                    border-radius: 8px;
-                }
-                h1, h2, h3 { color: #ffffff; }
-                p { color: #ffffff; }
-                strong { color: #fbbf24; }
-                ul { color: #ffffff; }
-                li { color: #ffffff; }
+                h1 { margin: 0; }
+                h2 { color: #E37233; }
+                strong { color: #F2995C; }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
                     <h1>🔐 Ticket Access OTP</h1>
-                    <p>Your secure access code for Spardha'26 tickets</p>
+                    <p>Your secure access code</p>
                 </div>
                 <div class="content">
                     <h2>Hello <strong>${name}</strong>,</h2>
-                    <p>You've requested access to view your Spardha'26 tickets. Please use the following OTP to verify your identity:</p>
+                    <p>Use this OTP to access your tickets. Valid for 10 minutes.</p>
                     
                     <div class="otp-section">
-                        <h3>Your OTP Code:</h3>
+                        <h3>Your OTP:</h3>
                         <div class="otp-code">${otp}</div>
-                        <p><strong>This OTP is valid for 10 minutes only.</strong></p>
                     </div>
                     
                     <div class="warning">
-                        <strong>Security Notice:</strong>
-                        <ul style="text-align: left; margin: 10px 0;">
-                            <li>Do not share this OTP with anyone</li>
-                            <li>OTP expires in 10 minutes</li>
-                            <li>Maximum 3 attempts allowed</li>
-                            <li>If you didn't request this, please ignore this email</li>
+                        <strong>⚠️ Security Notice:</strong>
+                        <ul style="text-align: left; margin: 10px 0; padding-left: 20px;">
+                            <li>Do not share this code.</li>
+                            <li>Expires in 10 minutes.</li>
                         </ul>
                     </div>
                     
                     <div class="footer">
-                        <p><strong>—<br>Team Spardha'26</strong></p>
-                        <p>Need help? Contact us anytime.</p>
+                        <p><strong>— Team Spardha'26 —</strong></p>
                     </div>
                 </div>
             </div>
@@ -365,191 +350,17 @@ function generatePaymentInitiationEmailContent(paymentData) {
 
 Hello ${name},
 
-You've requested access to view your Spardha'26 tickets. Please use the following OTP to verify your identity:
-
-
-
 Your OTP Code: ${otp}
 
-This OTP is valid for 10 minutes only.
-
-Security Notice:
-- Do not share this OTP with anyone
-- OTP expires in 10 minutes
-- Maximum 3 attempts allowed
-- If you didn't request this, please ignore this email
+Valid for 10 minutes. Do not share.
 
 —
-Team Spardha'26
-
-Need help? Contact us anytime.`;
+Team Spardha'26`;
 
         return { htmlContent, textContent };
     } else {
-        // Original registration email content - better events handling
-        let eventsText;
-        if (Array.isArray(events) && events.length > 0) {
-            const validEvents = events.filter(event =>
-                event &&
-                typeof event === 'string' &&
-                event.trim().length > 0 &&
-                event !== 'Demo Payment' &&
-                event !== 'Demo Event'
-            );
-            eventsText = validEvents.length > 0 ? validEvents.join(', ') : 'General Registration - Spardha\'26';
-        } else {
-            eventsText = 'General Registration - Spardha\'26';
-        }
-
-        console.log(`📧 Payment initiation email: input events=${JSON.stringify(events)}, final eventsText="${eventsText}"`);
-
-        const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>🎉 Welcome to Spardha'26!</title>
-            <style>
-                body { 
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                    line-height: 1.6; 
-                    color: #ffffff; 
-                    margin: 0; 
-                    padding: 0; 
-                    background-color: #1e3a8a;
-                }
-                .container { 
-                    max-width: 600px; 
-                    margin: 0 auto; 
-                    background-color: #1e3a8a; 
-                    border-radius: 10px; 
-                    overflow: hidden; 
-                    border: 2px solid #60a5fa;
-                }
-                .header { 
-                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); 
-                    color: white; 
-                    padding: 30px; 
-                    text-align: center; 
-                }
-                .content { 
-                    padding: 30px; 
-                    background-color: #2563eb; 
-                    color: #ffffff;
-                }
-                .order-details { 
-                    background-color: #1d4ed8; 
-                    padding: 20px; 
-                    border-radius: 8px; 
-                    margin: 20px 0; 
-                    border: 2px solid #60a5fa;
-                }
-                .footer { 
-                    text-align: center; 
-                    margin-top: 30px; 
-                    color: #e0e7ff; 
-                    background-color: #1e40af; 
-                    padding: 20px; 
-                    border-radius: 8px; 
-                    border: 2px solid #60a5fa;
-                }
-                .events-list { 
-                    background-color: #3730a3; 
-                    color: #ffffff; 
-                    padding: 15px; 
-                    border-left: 4px solid #fbbf24; 
-                    margin: 10px 0; 
-                    border-radius: 8px;
-                }
-                .ticket-section { 
-                    background-color: #1d4ed8; 
-                    padding: 20px; 
-                    border-radius: 8px; 
-                    margin: 20px 0; 
-                    text-align: center; 
-                    border: 2px solid #60a5fa;
-                }
-                .ticket-button { 
-                    display: inline-block; 
-                    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); 
-                    color: #1e3a8a; 
-                    padding: 15px 30px; 
-                    text-decoration: none; 
-                    border-radius: 25px; 
-                    font-weight: bold; 
-                    margin: 10px 0; 
-                    border: 2px solid #fcd34d;
-                }
-                h1, h2, h3 { color: #ffffff; }
-                p { color: #ffffff; }
-                strong { color: #fbbf24; }
-                a { color: #1e3a8a; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🎉 Welcome to Spardha'26!</h1>
-                </div>
-                <div class="content">
-                    <h2>Registration Confirmed!</h2>
-                    <p><strong>Hi ${name},</strong></p>
-                    <p>Registration confirmed for Spardha'26.</p>
-                    
-                    <div class="order-details">
-                        <h3>Your Registration Details:</h3>
-                        <p><strong>Name:</strong> ${name}</p>
-                        <div class="events-list">
-                            <strong>Events Registered:</strong><br />
-                            ${eventsText}
-                        </div>
-                    </div>
-                    
-                    <div class="ticket-section">
-                        <h3>Your Entry Ticket:</h3>
-                        <p><strong>Your QR code is attached to this email as an image!</strong></p>
-                        <p>Please save the attached QR code image and show it at the entry gate for quick access.</p>
-                        <p style="margin-top: 15px;">You can also access your ticket online:</p>
-                        <a href="https://spardha.jklu.edu.in/ticket" class="ticket-button">View Ticket Online</a>
-                    </div>
-                    
-                    <div class="footer">
-                        <p><strong>—<br>Team Spardha'26</strong></p>
-                        
-                        <p>Need help or have a question? Reach out to us anytime.</p>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>`;
-
-        const textContent = `
-🎉 Welcome to Spardha'26!
-
-Registration Confirmed!
-Hi ${name},
-
-Registration confirmed for Spardha'26.
-
-Your Registration Details:
-Name: ${name}
-
-Events Registered:
-${eventsText}
-
-Your Entry Ticket:
-Your QR code is attached to this email as an image!
-Please save the attached QR code image and show it at the entry gate for quick access.
-
-You can also access your ticket online: https://spardha.jklu.edu.in/ticket
-
-—
-Team Spardha'26
-
-Need help or have a question? Reach out to us anytime.`;
-
-        return { htmlContent, textContent };
+        // Fallback to Main Registration Email logic (DRY)
+        return generateRegistrationEmailContent(paymentData);
     }
 }
 

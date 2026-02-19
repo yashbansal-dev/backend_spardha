@@ -739,6 +739,121 @@ router.post("/send-email/:userId", verifyAdmin, async (req, res) => {
   }
 });
 
+// ========================= ANALYTICS & EXPORT ROUTES =========================
+
+// Get Analytics Dashboard Data (admin only)
+router.get("/analytics/dashboard", verifyAdmin, async (req, res) => {
+  try {
+    // 1. Total Revenue (sum of completed purchases)
+    const revenueResult = await Purchase.aggregate([
+      { $match: { paymentStatus: 'completed' } },
+      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+    ]);
+    const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
+
+    // 2. Total Registrations
+    const totalRegistrations = await User.countDocuments({});
+
+    // 3. Registrations with Payment (Users who bought something)
+    const paidRegistrations = await User.countDocuments({
+      events: { $exists: true, $not: { $size: 0 } }
+    });
+
+    // 4. Daily Registrations (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const dailyRegistrations = await User.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // 5. Event Popularity (Top 5)
+    // We need to unwind the events array in Users to count them
+    const eventPopularity = await User.aggregate([
+      { $unwind: "$events" },
+      { $group: { _id: "$events", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+
+    res.json({
+      success: true,
+      stats: {
+        totalRevenue,
+        totalRegistrations,
+        paidRegistrations,
+        conversionRate: totalRegistrations > 0 ? ((paidRegistrations / totalRegistrations) * 100).toFixed(1) : 0
+      },
+      charts: {
+        dailyRegistrations,
+        eventPopularity
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Export Participants to CSV (admin only)
+router.get("/export/participants", verifyAdmin, async (req, res) => {
+  try {
+    const { eventFilter } = req.query;
+    let filter = {};
+
+    if (eventFilter && eventFilter !== 'all') {
+      filter = { events: { $in: [eventFilter] } };
+    }
+
+    const users = await User.find(filter).sort({ createdAt: -1 }).lean();
+
+    // Manual CSV construction (simple and fewer dependencies to break)
+    // Columns: Name, Email, Contact, University, Event Count, Events, Validated, Entered, Email Sent
+    let csvContent = "Name,Email,Contact No,University,Gender,Events Registered,Total Events,Payment Done,Email Sent\n";
+
+    users.forEach(user => {
+      // Escape fields to prevent CSV breakage
+      const safeName = (user.name || "").replace(/,/g, " ");
+      const safeEmail = (user.email || "").replace(/,/g, " ");
+      const safeUni = (user.universityName || "").replace(/,/g, " ");
+      const eventsList = (user.events || []).join("; "); // Use semicolon for list inside CSV
+      const isPaid = (user.events && user.events.length > 0) ? "Yes" : "No";
+
+      const row = [
+        safeName,
+        safeEmail,
+        user.contactNo || "",
+        safeUni,
+        user.gender || "",
+        `"${eventsList}"`, // Quote the events list
+        user.events ? user.events.length : 0,
+        isPaid,
+        user.emailSent ? "Yes" : "No"
+      ].join(",");
+
+      csvContent += row + "\n";
+    });
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=participants_${new Date().toISOString().split('T')[0]}.csv`);
+
+    res.status(200).send(csvContent);
+
+  } catch (error) {
+    console.error('Error exporting participants:', error);
+    res.status(500).json({ success: false, message: 'Failed to export data' });
+  }
+});
+
 // Send bulk emails to all users who haven't received emails (admin only)
 router.post("/send-bulk-emails", verifyAdmin, async (req, res) => {
   try {
@@ -876,6 +991,54 @@ router.post("/send-bulk-emails", verifyAdmin, async (req, res) => {
       success: false,
       message: 'Internal server error'
     });
+  }
+});
+
+// Retry sending email for a specific order (admin only)
+router.post("/retry-email/:orderId", verifyAdmin, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const purchase = await Purchase.findOne({ orderId: orderId });
+    if (!purchase) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const user = await User.findById(purchase.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found for this order' });
+    }
+
+    // Prepare email data
+    const emailData = {
+      name: user.name,
+      email: user.email,
+      events: user.events || [],
+      qrCodeBase64: user.qrCodeBase64
+    };
+
+    // Attempt to send email
+    const emailResult = await sendRegistrationEmail(user.email, emailData);
+
+    if (emailResult.success) {
+      user.emailSent = true;
+      user.emailSentAt = new Date();
+      purchase.emailSent = true; // Update purchase flag too
+      await user.save();
+      await purchase.save();
+
+      res.json({ success: true, message: `Email sent successfully to ${user.email}` });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send email',
+        error: emailResult.error
+      });
+    }
+
+  } catch (error) {
+    console.error('Error retrying email:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 

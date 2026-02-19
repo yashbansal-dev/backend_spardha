@@ -913,7 +913,8 @@ router.get('/success/:orderId', async (req, res) => {
                         const qrCodeBase64 = await generateUserQRCode(userWithoutQR._id, {
                             name: userWithoutQR.name,
                             email: userWithoutQR.email,
-                            events: userWithoutQR.events || []
+                            events: userWithoutQR.events || [],
+                            orderId: purchase.orderId // Pass for QR URL
                         });
 
                         userWithoutQR.qrPath = `${userWithoutQR._id}`;
@@ -1023,7 +1024,8 @@ router.get('/success/:orderId', async (req, res) => {
                     name: user.name,
                     email: user.email,
                     events: user.events || ['General Registration'],
-                    qrCodeBase64: user.qrCodeBase64
+                    qrCodeBase64: user.qrCodeBase64,
+                    orderId: purchase.orderId // Pass orderId for ticket link
                 };
 
                 // Send email to team leader (main person)
@@ -1050,7 +1052,8 @@ router.get('/success/:orderId', async (req, res) => {
                                     name: memberUser.name,
                                     email: memberUser.email,
                                     events: memberUser.events || eventNames || ['General Registration'],
-                                    qrCodeBase64: memberUser.qrCodeBase64
+                                    qrCodeBase64: memberUser.qrCodeBase64,
+                                    orderId: purchase.orderId // Pass orderId for ticket link
                                 };
 
                                 const memberEmailResult = await sendRegistrationEmail(memberUser.email, memberEmailData);
