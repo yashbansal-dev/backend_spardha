@@ -329,14 +329,45 @@ purchaseSchema.index({ paymentSessionId: 1 });
 purchaseSchema.index({ paymentStatus: 1 });
 purchaseSchema.index({ purchaseDate: -1 });
 
+const bookingDraftSchema = new mongoose.Schema({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true
+  },
+  step: {
+    type: Number,
+    default: 1
+  },
+  userData: {
+    type: Object,
+    default: {}
+  },
+  cart: {
+    type: Array,
+    default: []
+  },
+  teamMembers: {
+    type: Object,
+    default: {}
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
 const User = mongoose.model("User", userSchema);
 const Event = mongoose.model("Event", eventSchema);
 const TeamComposition = mongoose.model("TeamComposition", teamCompositionSchema);
 const Purchase = mongoose.model("Purchase", purchaseSchema);
+const BookingDraft = mongoose.model("BookingDraft", bookingDraftSchema);
 
 module.exports = {
   User,
   Event,
   TeamComposition,
-  Purchase
+  Purchase,
+  BookingDraft
 };

@@ -2,8 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
-const { User, Event, TeamComposition, Purchase } = require("../models/models");
-const { verifyToken,verifyAdmin } = require("../middleware/auth");
+const { User, Event, TeamComposition, Purchase, BookingDraft } = require("../models/models");
+const { verifyToken, verifyAdmin } = require("../middleware/auth");
 const { sendPaymentInitiatedEmail } = require("../utils/emailService");
 const path = require('path');
 const fs = require('fs');
@@ -21,7 +21,7 @@ function generateOTP() {
 router.post('/send-ticket-otp', async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({
         success: false,
@@ -30,10 +30,10 @@ router.post('/send-ticket-otp', async (req, res) => {
     }
 
     // Check if user exists (team leader or individual)
-    const user = await User.findOne({ 
+    const user = await User.findOne({
       email: email.toLowerCase().trim()
     });
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -88,7 +88,7 @@ router.post('/send-ticket-otp', async (req, res) => {
 router.post('/verify-ticket-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
-    
+
     if (!email || !otp) {
       return res.status(400).json({
         success: false,
@@ -162,14 +162,14 @@ router.post('/verify-ticket-otp', async (req, res) => {
 router.get('/qrcode/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    
+
     // Find user by ID (unified schema - only one collection now)
     const user = await User.findById(id);
-    
+
     if (!user) {
       return res.status(404).send('User not found');
     }
-    
+
     // Security check: Only serve QR codes for users with completed payments
     // Check if user has any completed purchases
     const completedPurchase = await Purchase.findOne({
@@ -180,29 +180,29 @@ router.get('/qrcode/:id', async (req, res) => {
       ],
       paymentStatus: 'completed'
     });
-    
+
     if (!completedPurchase) {
       console.log(`❌ Access denied: No completed payment found for user ${user.email}`);
       return res.status(403).send('Access denied: Payment not completed');
     }
-    
+
     // Check if QR code exists as base64
     if (user.qrCodeBase64) {
       res.type('png');
       res.send(Buffer.from(user.qrCodeBase64, 'base64'));
       return;
     }
-    
+
     // Fallback to file system for backward compatibility
     const filename = `${id}.png`;
     const filePath = path.join(__dirname, '../public/qrcodes', filename);
-    
+
     if (fs.existsSync(filePath)) {
       res.type('png');
       fs.createReadStream(filePath).pipe(res);
       return;
     }
-    
+
     return res.status(404).send('QR code not found');
   } catch (error) {
     console.error('Error serving QR code:', error);
@@ -241,8 +241,8 @@ router.get('/profile/:id', verifyAdmin, async (req, res) => {
 
 
 // Get user data (requires authentication) - UPDATED FOR UNIFIED USER SYSTEM
-router.get("/user", verifyToken, async (req,res)=>{
-    try{
+router.get("/user", verifyToken, async (req, res) => {
+  try {
     console.log(req.user);
     const user = req.user; // User is already available from verifyToken middleware
     if (!user) {
@@ -254,8 +254,8 @@ router.get("/user", verifyToken, async (req,res)=>{
 
     const events = user.events;
     const eventData = [];
-    for (i=0;i<events.length;i++){
-      const info = await Event.findOne({name:events[i]});
+    for (i = 0; i < events.length; i++) {
+      const info = await Event.findOne({ name: events[i] });
       if (info) {
         eventData.push(info);
       }
@@ -270,11 +270,11 @@ router.get("/user", verifyToken, async (req,res)=>{
     }).populate('teamLeader.userId teamMembers.userId');
 
     const data = {
-      _id:user._id,
+      _id: user._id,
       name: user.name,
       email: user.email,
       profileImage: user.profileImage || "/images/default-avatar.jpg",
-      qrPath:user.qrPath,
+      qrPath: user.qrPath,
       qrCodeBase64: user.qrCodeBase64,
       registeredEvents: eventData,
       hasEntered: user.hasEntered,
@@ -295,11 +295,11 @@ router.get("/user", verifyToken, async (req,res)=>{
     }
 
     return res.send(data)
-    }catch (e){
-        return res.status(401).send({
-            message:"unauthenticated"
-        })
-    }   
+  } catch (e) {
+    return res.status(401).send({
+      message: "unauthenticated"
+    })
+  }
 });
 
 // Get public events (no authentication required)
@@ -365,12 +365,12 @@ router.post("/register-event", verifyToken, async (req, res) => {
 router.get('/team/:teamId', verifyToken, async (req, res) => {
   try {
     const teamId = req.params.teamId;
-    
+
     // Find team composition by ID
     const teamComposition = await TeamComposition.findById(teamId)
       .populate('teamLeader.userId')
       .populate('teamMembers.userId');
-      
+
     if (!teamComposition) {
       return res.status(404).json({
         success: false,
@@ -380,10 +380,10 @@ router.get('/team/:teamId', verifyToken, async (req, res) => {
 
     // Check if requesting user is the team leader or a team member or admin
     const isTeamLeader = teamComposition.teamLeader.userId._id.toString() === req.user._id.toString();
-    const isTeamMember = teamComposition.teamMembers.some(member => 
+    const isTeamMember = teamComposition.teamMembers.some(member =>
       member.userId._id.toString() === req.user._id.toString()
     );
-    
+
     if (!isTeamLeader && !isTeamMember && !req.user.isAdmin) {
       return res.status(403).json({
         success: false,
@@ -442,7 +442,7 @@ router.get('/team/:teamId', verifyToken, async (req, res) => {
 router.post('/team-by-email', async (req, res) => {
   try {
     const { accessToken } = req.body;
-    
+
     if (!accessToken) {
       return res.status(401).json({
         success: false,
@@ -466,10 +466,10 @@ router.post('/team-by-email', async (req, res) => {
     }
 
     // Find the user by email
-    const user = await User.findOne({ 
+    const user = await User.findOne({
       email: email.toLowerCase().trim()
     });
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -532,7 +532,7 @@ router.post('/team-by-email', async (req, res) => {
     for (const teamComposition of teamCompositions) {
       // Check if the current user is the team leader
       const isTeamLeader = teamComposition.teamLeader.userId._id.toString() === user._id.toString();
-      
+
       // Get team members data
       const teamMembers = await Promise.all(teamComposition.teamMembers.map(async (member) => {
         // Fetch the complete user data from the users collection to get QR codes
@@ -628,6 +628,58 @@ router.post('/team-by-email', async (req, res) => {
       success: false,
       message: 'Internal server error'
     });
+  }
+});
+
+// Save booking draft (auto-save)
+router.post('/save-draft', async (req, res) => {
+  try {
+    const { email, step, userData, cart, teamMembers } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    // Upsert draft
+    await BookingDraft.findOneAndUpdate(
+      { email: email.toLowerCase().trim() },
+      {
+        email: email.toLowerCase().trim(),
+        step,
+        userData,
+        cart,
+        teamMembers,
+        updatedAt: Date.now()
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true, message: 'Draft saved' });
+  } catch (error) {
+    console.error('Error saving draft:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Get booking draft
+router.get('/draft', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const draft = await BookingDraft.findOne({ email: email.toLowerCase().trim() });
+
+    if (!draft) {
+      return res.status(404).json({ success: false, message: 'No draft found' });
+    }
+
+    res.json({ success: true, draft });
+  } catch (error) {
+    console.error('Error fetching draft:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
