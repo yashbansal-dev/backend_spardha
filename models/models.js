@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema({
     unique: true, // Ensure global uniqueness - one user per email
     required: true
   },
-  // password removed
+  password: String,
   events: [String], // All events this user is registered for (can accumulate)
   qrPath: String,
   qrCodeBase64: String, // Single QR code for all events
