@@ -867,47 +867,62 @@ router.get('/status/:orderId', async (req, res) => {
 });
 
 // Payment success handler - processes completed payments and sends emails
+// Called by frontend after Cashfree redirects to /payment/success
 router.get('/success/:orderId', async (req, res) => {
     try {
         const { orderId } = req.params;
         console.log('🎉 GET /success/:orderId called for order:', orderId);
 
-        // Verify payment status with Cashfree first
-        let paymentStatus;
-        try {
-            const response = await cashfree.PGOrderFetchPayments(orderId);
-            const payments = response.data;
-            if (payments && payments.length > 0) {
-                const latestPayment = payments[payments.length - 1];
-                paymentStatus = latestPayment.payment_status;
-                console.log('🔍 Payment status from Cashfree:', paymentStatus);
-            } else {
-                console.log('⚠️ No payment data found for order:', orderId);
-                paymentStatus = 'pending';
+        // ─── RETRY LOOP ──────────────────────────────────────────────
+        // Cashfree can return 'pending' for a few seconds right after payment.
+        // We poll up to 5 times with 2-second gaps before giving up.
+        // ─────────────────────────────────────────────────────────────
+        const MAX_RETRIES = 5;
+        const RETRY_DELAY_MS = 2000;
+        let paymentStatus = 'pending';
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const response = await cashfree.PGOrderFetchPayments(orderId);
+                const payments = response.data;
+                if (payments && payments.length > 0) {
+                    const latestPayment = payments[payments.length - 1];
+                    paymentStatus = latestPayment.payment_status;
+                    console.log(`🔍 Attempt ${attempt}/${MAX_RETRIES} — Cashfree status: ${paymentStatus}`);
+                } else {
+                    console.log(`⚠️ Attempt ${attempt}/${MAX_RETRIES} — No payment data yet`);
+                }
+            } catch (err) {
+                console.error(`❌ Attempt ${attempt}/${MAX_RETRIES} — Cashfree call failed:`, err.message);
             }
-        } catch (error) {
-            console.error('❌ Error verifying payment status:', error);
-            // If Cashfree call fails, fall through and let processPaymentSuccess check DB
-            paymentStatus = 'pending';
+
+            if (paymentStatus === 'SUCCESS') break; // Got what we need
+
+            if (attempt < MAX_RETRIES) {
+                console.log(`⏳ Waiting ${RETRY_DELAY_MS}ms before retry...`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            }
         }
 
+        // After retries — process if SUCCESS, or process anyway as a safety net
+        // (the webhook may have already marked it — processPaymentSuccess is idempotent)
         if (paymentStatus === 'SUCCESS') {
-            console.log('✅ Payment confirmed as successful for order:', orderId);
-            const result = await processPaymentSuccess(orderId);
-
-            if (result.success) {
-                return res.json({
-                    success: true,
-                    message: result.alreadyProcessed ? 'Payment already processed' : 'Payment processed successfully',
-                    user: result.user ? { id: result.user._id, name: result.user.name, email: result.user.email } : undefined,
-                    purchase: result.purchase ? { orderId: result.purchase.orderId, status: result.purchase.paymentStatus } : undefined
-                });
-            } else {
-                return res.status(404).json({ success: false, message: result.message });
-            }
+            console.log('✅ Payment confirmed SUCCESS — processing now');
         } else {
-            console.log('⏳ Payment still pending for order:', orderId);
-            return res.json({ success: true, message: 'Payment is still pending', status: 'pending' });
+            console.log(`⚠️ Payment status still "${paymentStatus}" after ${MAX_RETRIES} retries — processing anyway as safety net`);
+        }
+
+        const result = await processPaymentSuccess(orderId);
+
+        if (result.success) {
+            return res.json({
+                success: true,
+                message: result.alreadyProcessed ? 'Payment already processed' : 'Payment processed successfully',
+                user: result.user ? { id: result.user._id, name: result.user.name, email: result.user.email } : undefined,
+                purchase: result.purchase ? { orderId: result.purchase.orderId, status: result.purchase.paymentStatus } : undefined
+            });
+        } else {
+            return res.status(404).json({ success: false, message: result.message });
         }
 
     } catch (error) {
@@ -919,6 +934,7 @@ router.get('/success/:orderId', async (req, res) => {
         });
     }
 });
+
 
 // ----------------------------------------------------------------------
 // WEBHOOK HANDLER
