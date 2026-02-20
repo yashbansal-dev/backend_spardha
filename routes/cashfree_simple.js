@@ -22,15 +22,18 @@ async function processPaymentSuccess(orderId) {
         return { success: false, message: 'Purchase not found' };
     }
 
-    // Skip if already processed
-    if (purchase.paymentStatus === 'completed') {
-        console.log('✅ Payment already processed for order:', orderId);
+    // Skip ONLY if already fully processed (payment done + email sent)
+    // If payment is done but email failed previously, fall through and retry the email
+    if (purchase.paymentStatus === 'completed' && purchase.emailSent === true) {
+        console.log('✅ Payment already fully processed (email sent) for order:', orderId);
         return { success: true, alreadyProcessed: true, purchase };
     }
 
-    // Mark as completed
-    purchase.paymentStatus = 'completed';
-    purchase.paymentCompletedAt = new Date();
+    // Mark as completed (only if not already marked — might be a retry for failed email)
+    if (purchase.paymentStatus !== 'completed') {
+        purchase.paymentStatus = 'completed';
+        purchase.paymentCompletedAt = new Date();
+    }
 
     // Extract event names from purchase items
     const eventNames = purchase.items.map(item => item.itemName).filter(name => name && name !== 'Demo Payment');
