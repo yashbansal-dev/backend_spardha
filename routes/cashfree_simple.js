@@ -9,6 +9,197 @@ const fs = require('fs');
 const path = require('path');
 const router = express.Router();
 
+// -----------------------------------------------------------------------
+// SHARED HELPER: Process a completed payment (QR + Email)
+// Called from both GET /success/:orderId and the Webhook handler
+// -----------------------------------------------------------------------
+async function processPaymentSuccess(orderId) {
+    console.log('🎉 processPaymentSuccess called for order:', orderId);
+
+    const purchase = await Purchase.findOne({ orderId });
+    if (!purchase) {
+        console.error('❌ Purchase not found for orderId:', orderId);
+        return { success: false, message: 'Purchase not found' };
+    }
+
+    // Skip if already processed
+    if (purchase.paymentStatus === 'completed') {
+        console.log('✅ Payment already processed for order:', orderId);
+        return { success: true, alreadyProcessed: true, purchase };
+    }
+
+    // Mark as completed
+    purchase.paymentStatus = 'completed';
+    purchase.paymentCompletedAt = new Date();
+
+    // Extract event names from purchase items
+    const eventNames = purchase.items.map(item => item.itemName).filter(name => name && name !== 'Demo Payment');
+    console.log('📝 Extracted event names from purchase:', eventNames);
+
+    // Find or create the main user
+    let user = null;
+    if (purchase.userId) {
+        user = await User.findById(purchase.userId);
+        if (user) console.log(`👤 Found user by userId: ${user.email}`);
+    }
+    if (!user && purchase.userDetails?.email) {
+        user = await User.findOne({ email: purchase.userDetails.email });
+        if (user) console.log(`👤 Found user by email: ${user.email}`);
+    }
+
+    if (!user) {
+        console.log('👤 Creating new user for email:', purchase.userDetails.email);
+        user = new User({
+            name: purchase.userDetails.name,
+            email: purchase.userDetails.email,
+            contactNo: purchase.userDetails.contactNo || '',
+            gender: purchase.userDetails.gender || '',
+            age: purchase.userDetails.age || null,
+            universityName: purchase.userDetails.universityName || '',
+            address: purchase.userDetails.address || '',
+            universityIdCard: purchase.userDetails.formData?.universityIdCard || '',
+            events: eventNames.length > 0 ? eventNames : ['General Registration'],
+            isvalidated: true
+        });
+    } else {
+        if (purchase.userDetails.contactNo) user.contactNo = purchase.userDetails.contactNo;
+        if (purchase.userDetails.gender) user.gender = purchase.userDetails.gender;
+        if (purchase.userDetails.age) user.age = purchase.userDetails.age;
+        if (purchase.userDetails.universityName) user.universityName = purchase.userDetails.universityName;
+        if (purchase.userDetails.address) user.address = purchase.userDetails.address;
+        if (purchase.userDetails.formData?.universityIdCard) user.universityIdCard = purchase.userDetails.formData.universityIdCard;
+
+        if (eventNames.length > 0) {
+            const currentEvents = user.events || [];
+            const newEvents = eventNames.filter(e => !currentEvents.includes(e));
+            if (newEvents.length > 0) {
+                user.events = [...currentEvents, ...newEvents];
+                console.log('✅ Added new events to existing user:', newEvents);
+            }
+        } else if (!user.events || user.events.length === 0) {
+            user.events = ['General Registration'];
+        }
+    }
+
+    // Generate QR code for main user — always include orderId for correct URL
+    if (!user.qrCodeBase64) {
+        try {
+            const qrCodeBase64 = await generateUserQRCode(user._id || 'temp', {
+                name: user.name,
+                email: user.email,
+                events: user.events || [],
+                orderId: orderId  // ✅ Pass orderId so QR links to the correct ticket page
+            });
+            user.qrPath = `${user._id}`;
+            user.qrCodeBase64 = qrCodeBase64;
+            console.log('✅ QR code generated for main user');
+        } catch (qrError) {
+            console.error('❌ QR code generation failed for main user:', qrError);
+        }
+    } else {
+        console.log('ℹ️ QR code already exists for main user');
+    }
+
+    await user.save();
+
+    // Update purchase
+    purchase.userId = user._id;
+    purchase.qrGenerated = true;
+    purchase.qrCodeBase64 = user.qrCodeBase64;
+    await purchase.save();
+    console.log('✅ Purchase status updated to completed for order:', orderId);
+
+    // Process team registrations
+    if (purchase.userDetails.teamMembers && Object.keys(purchase.userDetails.teamMembers).length > 0) {
+        console.log('👥 Processing Team Registrations...');
+        const teamData = purchase.userDetails.teamMembers;
+
+        for (const [eventId, members] of Object.entries(teamData)) {
+            const matchedItem = purchase.items.find(i => i.itemId === eventId || i.itemId === eventId.replace(/-/g, ' '));
+            const eventName = matchedItem ? matchedItem.itemName : eventId;
+
+            console.log(`   🏆 Creating Team for: ${eventName}`);
+
+            const memberObjects = [];
+            for (const m of members) {
+                let memberUser = await User.findOne({ email: m.email });
+                if (!memberUser) {
+                    memberUser = new User({
+                        name: m.name,
+                        email: m.email,
+                        contactNo: m.phone || '',
+                        events: [eventName],
+                        isvalidated: false
+                    });
+                    await memberUser.save();
+                    console.log(`      ✨ Created new user for member: ${m.email}`);
+                } else {
+                    if (!memberUser.events.includes(eventName)) {
+                        memberUser.events.push(eventName);
+                        await memberUser.save();
+                    }
+                }
+                memberObjects.push({
+                    userId: memberUser._id,
+                    name: m.name,
+                    email: m.email,
+                    role: 'member'
+                });
+            }
+
+            const newTeam = new TeamComposition({
+                eventName: eventName,
+                teamName: `${user.name}'s Team`,
+                teamLeader: { userId: user._id, name: user.name, email: user.email, hasEntered: false },
+                teamMembers: memberObjects,
+                totalMembers: memberObjects.length + 1,
+                purchaseId: purchase._id
+            });
+            await newTeam.save();
+
+            user.teamRegistrations.push({
+                eventName: eventName,
+                teamLeaderId: user._id,
+                isTeamLeader: true,
+                teamName: newTeam.teamName,
+                teamCompositionId: newTeam._id
+            });
+        }
+        await user.save();
+    }
+
+    // ====================================================
+    // SEND EMAIL TO MAIN USER
+    // ====================================================
+    try {
+        const emailData = {
+            name: user.name,
+            email: user.email,
+            events: user.events || ['General Registration'],
+            qrCodeBase64: user.qrCodeBase64,
+            orderId: purchase.orderId
+        };
+
+        const emailResult = await sendRegistrationEmail(user.email, emailData);
+        if (emailResult.success) {
+            console.log('✅ Registration email sent to:', user.email);
+            user.emailSent = true;
+            user.emailSentAt = new Date();
+            await user.save();
+            // ✅ Also mark the purchase as email sent
+            purchase.emailSent = true;
+            purchase.emailSentAt = new Date();
+            await purchase.save();
+        } else {
+            console.error('❌ Failed to send email to:', user.email, emailResult.error);
+        }
+    } catch (emailError) {
+        console.error('❌ Email sending error for main user:', emailError);
+    }
+
+    return { success: true, purchase, user };
+}
+
 // Initialize Cashfree with production credentials
 let cashfree;
 let isUsingProd = true;
@@ -341,7 +532,7 @@ router.post('/create-order', async (req, res) => {
             environment: isUsingProd ? 'production' : 'sandbox',
             metadata: {
                 userAgent: req.get('User-Agent'),
-                ip: req.ip,
+                ipAddress: req.ip,  // ✅ matches schema field name
                 timestamp: new Date()
             }
         });
@@ -679,34 +870,13 @@ router.get('/status/:orderId', async (req, res) => {
 router.get('/success/:orderId', async (req, res) => {
     try {
         const { orderId } = req.params;
-        console.log('🎉 Processing payment success for order:', orderId);
+        console.log('🎉 GET /success/:orderId called for order:', orderId);
 
-        // Find the purchase record
-        const purchase = await Purchase.findOne({ orderId: orderId });
-        if (!purchase) {
-            console.error('❌ Purchase not found for orderId:', orderId);
-            return res.status(404).json({
-                success: false,
-                message: 'Purchase not found'
-            });
-        }
-
-        // Check if payment is already processed
-        if (purchase.paymentStatus === 'completed') {
-            console.log('✅ Payment already processed for order:', orderId);
-            return res.json({
-                success: true,
-                message: 'Payment already processed',
-                purchase: purchase
-            });
-        }
-
-        // Verify payment status with Cashfree
+        // Verify payment status with Cashfree first
         let paymentStatus;
         try {
             const response = await cashfree.PGOrderFetchPayments(orderId);
             const payments = response.data;
-
             if (payments && payments.length > 0) {
                 const latestPayment = payments[payments.length - 1];
                 paymentStatus = latestPayment.payment_status;
@@ -717,434 +887,27 @@ router.get('/success/:orderId', async (req, res) => {
             }
         } catch (error) {
             console.error('❌ Error verifying payment status:', error);
+            // If Cashfree call fails, fall through and let processPaymentSuccess check DB
             paymentStatus = 'pending';
         }
 
         if (paymentStatus === 'SUCCESS') {
             console.log('✅ Payment confirmed as successful for order:', orderId);
+            const result = await processPaymentSuccess(orderId);
 
-            // Update purchase status to completed
-            purchase.paymentStatus = 'completed';
-            purchase.paymentCompletedAt = new Date();
-
-            // Generate QR codes for ALL users associated with this purchase
-            console.log('🔄 Starting QR code generation for all users in this purchase...');
-
-            // Step 1: Find main user — use userId first (more reliable), fallback to email
-            let user = null;
-            if (purchase.userId) {
-                user = await User.findById(purchase.userId);
-                if (user) console.log(`👤 Found user by userId: ${user.email}`);
-            }
-            if (!user && purchase.userDetails?.email) {
-                user = await User.findOne({ email: purchase.userDetails.email });
-                if (user) console.log(`👤 Found user by email: ${user.email}`);
-            }
-
-            // Extract event names from purchase items
-            const eventNames = purchase.items.map(item => item.itemName).filter(name => name && name !== 'Demo Payment');
-            console.log('📝 Extracted event names from purchase:', eventNames);
-
-            if (!user) {
-                console.log('👤 Creating new user for email:', purchase.userDetails.email);
-                user = new User({
-                    name: purchase.userDetails.name,
-                    email: purchase.userDetails.email,
-                    contactNo: purchase.userDetails.contactNo || '',
-                    gender: purchase.userDetails.gender || '',
-                    age: purchase.userDetails.age || null,
-                    universityName: purchase.userDetails.universityName || '',
-                    address: purchase.userDetails.address || '',
-                    universityIdCard: purchase.userDetails.formData?.universityIdCard || '',
-                    events: eventNames.length > 0 ? eventNames : ['General Registration'],
-                    isvalidated: true
+            if (result.success) {
+                return res.json({
+                    success: true,
+                    message: result.alreadyProcessed ? 'Payment already processed' : 'Payment processed successfully',
+                    user: result.user ? { id: result.user._id, name: result.user.name, email: result.user.email } : undefined,
+                    purchase: result.purchase ? { orderId: result.purchase.orderId, status: result.purchase.paymentStatus } : undefined
                 });
             } else {
-                // Update existing user profile with new details if they are missing or if this is a new registration
-                if (purchase.userDetails.contactNo) user.contactNo = purchase.userDetails.contactNo;
-                if (purchase.userDetails.gender) user.gender = purchase.userDetails.gender;
-                if (purchase.userDetails.age) user.age = purchase.userDetails.age;
-                if (purchase.userDetails.universityName) user.universityName = purchase.userDetails.universityName;
-                if (purchase.userDetails.address) user.address = purchase.userDetails.address;
-                if (purchase.userDetails.formData?.universityIdCard) user.universityIdCard = purchase.userDetails.formData.universityIdCard;
-
-                // Update existing user with new events
-                if (eventNames.length > 0) {
-                    // Add new events to existing events array (avoid duplicates)
-                    const currentEvents = user.events || [];
-                    const newEvents = eventNames.filter(event => !currentEvents.includes(event));
-                    if (newEvents.length > 0) {
-                        user.events = [...currentEvents, ...newEvents];
-                        console.log('✅ Added new events to existing user:', newEvents);
-                    }
-                } else if (!user.events || user.events.length === 0) {
-                    user.events = ['General Registration'];
-                    console.log('⚠️ No valid events found, setting to General Registration');
-                }
+                return res.status(404).json({ success: false, message: result.message });
             }
-
-            // Generate QR code for main person only if not already generated
-            if (!user.qrCodeBase64) {
-                try {
-                    const qrCodeBase64 = await generateUserQRCode(user._id, {
-                        name: user.name,
-                        email: user.email,
-                        events: user.events || []
-                    });
-                    user.qrPath = `${user._id}`;
-                    user.qrCodeBase64 = qrCodeBase64;
-                    console.log('✅ QR code generated for main person:', user._id);
-                } catch (qrError) {
-                    console.error('❌ QR code generation failed for main person:', qrError);
-                }
-            } else {
-                console.log('ℹ️ QR code already exists for main person:', user._id);
-            }
-
-            await user.save();
-
-            // Update purchase with user ID and QR info
-            purchase.userId = user._id;
-            purchase.qrGenerated = true;
-            purchase.qrCodeBase64 = user.qrCodeBase64;
-
-            // Save purchase with all updates
-            await purchase.save();
-            console.log('✅ Purchase status updated to completed for order:', orderId);
-
-            // ==========================================
-            // TEAM REGISTRATION PROCESSING
-            // ==========================================
-            if (purchase.userDetails.teamMembers && Object.keys(purchase.userDetails.teamMembers).length > 0) {
-                console.log('👥 Processing Team Registrations...');
-                const teamData = purchase.userDetails.teamMembers;
-
-                for (const [eventId, members] of Object.entries(teamData)) {
-                    // Find the event name from items (or map ID to name if we have a lookup)
-                    // We stored processedItems with itemId matching eventId usually, or we can use the key if it's the name
-                    // But in frontend we used IDs like 'cricket-leather'.
-                    // Let's try to find a matching item in purchase.items to get the proper name
-                    const matchedItem = purchase.items.find(i => i.itemId === eventId || i.itemId === eventId.replace(/-/g, ' '));
-                    const eventName = matchedItem ? matchedItem.itemName : eventId; // Fallback to ID if name not found
-
-                    console.log(`   🏆 Creating Team for: ${eventName}`);
-
-                    // Create TeamComposition
-                    const newTeam = new TeamComposition({
-                        eventName: eventName,
-                        teamName: `${user.name}'s Team`, // Default name, could be captured in frontend
-                        teamLeader: {
-                            userId: user._id,
-                            name: user.name,
-                            email: user.email,
-                            hasEntered: false
-                        },
-                        teamMembers: members.map(m => ({
-                            userId: user._id, // Ideally we should create User records for them too, but for now linking to Leader or placeholder
-                            // Wait, if we link to user._id, it means they are all the same user? No.
-                            // We should probably create 'Ghost Users' or just store their details embedded.
-                            // The schema expects 'userId' which is ObjectId ref 'User'.
-                            // If we don't have users for them, we might need to create them or make userId optional in schema?
-                            // Looking at schema: userId is required.
-                            // So we MUST create users for them? Or maybe just use the leader's ID for now?
-                            // Let's create new Unverified Users for them to be safe and correct.
-                            name: m.name,
-                            email: m.email,
-                            // We don't have IDs yet.
-                        })),
-                        totalMembers: members.length + 1, // +1 for Leader
-                        purchaseId: purchase._id
-                    });
-
-                    // We need valid User IDs for members.
-                    // Async Loop to find/create users for members
-                    const memberObjects = [];
-                    for (const m of members) {
-                        let memberUser = await User.findOne({ email: m.email });
-                        if (!memberUser) {
-                            memberUser = new User({
-                                name: m.name,
-                                email: m.email,
-                                contactNo: m.phone || '',
-                                events: [eventName],
-                                isvalidated: false
-                            });
-                            await memberUser.save();
-                            console.log(`      ✨ Created new user for member: ${m.email}`);
-                        } else {
-                            // Update existing user events
-                            if (!memberUser.events.includes(eventName)) {
-                                memberUser.events.push(eventName);
-                                await memberUser.save();
-                            }
-                        }
-                        memberObjects.push({
-                            userId: memberUser._id,
-                            name: m.name,
-                            email: m.email,
-                            role: 'member'
-                        });
-                    }
-
-                    newTeam.teamMembers = memberObjects;
-                    await newTeam.save();
-                    console.log(`      ✅ TeamComposition created: ${newTeam._id}`);
-
-                    // Link to Leader's teamRegistrations
-                    user.teamRegistrations.push({
-                        eventName: eventName,
-                        teamLeaderId: user._id,
-                        isTeamLeader: true,
-                        teamName: newTeam.teamName,
-                        teamCompositionId: newTeam._id
-                    });
-                }
-                await user.save();
-            }
-
-            // Step 3: Final check - Generate QR codes for any remaining users without QR codes
-            console.log('🔍 Final check: Generating QR codes for any users without them...');
-            try {
-                // Find all users associated with this purchase who don't have QR codes
-                const usersWithoutQR = await User.find({
-                    $or: [
-                        { email: purchase.userDetails.email },
-                        { email: { $in: (purchase.userDetails.teamMembers || []).map(tm => tm.email) } }
-                    ],
-                    qrCodeBase64: { $exists: false }
-                });
-
-                for (const userWithoutQR of usersWithoutQR) {
-                    try {
-                        console.log(`🎫 Generating missing QR code for user: ${userWithoutQR.email}`);
-
-                        const qrCodeBase64 = await generateUserQRCode(userWithoutQR._id, {
-                            name: userWithoutQR.name,
-                            email: userWithoutQR.email,
-                            events: userWithoutQR.events || [],
-                            orderId: purchase.orderId // Pass for QR URL
-                        });
-
-                        userWithoutQR.qrPath = `${userWithoutQR._id}`;
-                        userWithoutQR.qrCodeBase64 = qrCodeBase64;
-                        await userWithoutQR.save();
-
-                        console.log(`✅ Missing QR code generated for user: ${userWithoutQR._id} (${userWithoutQR.email})`);
-                    } catch (qrError) {
-                        console.error(`❌ Failed to generate missing QR code for ${userWithoutQR.email}:`, qrError);
-                    }
-                }
-
-                console.log(`🎯 QR code generation complete. Processed ${usersWithoutQR.length} users without QR codes.`);
-            } catch (finalQrError) {
-                console.error('❌ Error in final QR code generation step:', finalQrError);
-            }
-
-            // Update team compositions for this user (if any)
-            let teamMembers = [];
-            try {
-                console.log('🏆 Checking for team compositions to update for email:', user.email);
-
-                // Find team compositions where this user is either team leader or team member
-                const teamCompositions = await TeamComposition.find({
-                    $or: [
-                        { 'teamLeader.email': user.email },
-                        { 'teamMembers.email': user.email }
-                    ],
-                    paymentStatus: 'pending'
-                }).populate('teamMembers.userId', 'name email contactNo');
-
-                if (teamCompositions.length > 0) {
-                    console.log(`🎯 Found ${teamCompositions.length} team compositions to update`);
-
-                    // Extract team members for purchase record
-                    const allTeamMembers = new Set();
-
-                    for (const teamComp of teamCompositions) {
-                        teamComp.paymentStatus = 'completed';
-                        teamComp.purchaseId = purchase._id;
-                        teamComp.updatedAt = new Date();
-
-                        // Step 2: Generate QR codes for ALL team members
-                        console.log(`🔄 Generating QR codes for team members in ${teamComp.teamName}...`);
-
-                        for (const member of teamComp.teamMembers) {
-                            if (member.userId && member.userId.email !== user.email) {
-                                try {
-                                    // Find the team member user record
-                                    const memberUser = await User.findById(member.userId._id);
-                                    if (memberUser && !memberUser.qrCodeBase64) {
-                                        console.log(`🎫 Generating QR code for team member: ${memberUser.email}`);
-
-                                        const memberQrCodeBase64 = await generateUserQRCode(memberUser._id, {
-                                            name: memberUser.name,
-                                            email: memberUser.email,
-                                            events: memberUser.events || []
-                                        });
-
-                                        memberUser.qrPath = `${memberUser._id}`;
-                                        memberUser.qrCodeBase64 = memberQrCodeBase64;
-                                        await memberUser.save();
-
-                                        console.log(`✅ QR code generated for team member: ${memberUser._id} (${memberUser.email})`);
-                                    } else if (memberUser && memberUser.qrCodeBase64) {
-                                        console.log(`ℹ️ QR code already exists for team member: ${memberUser.email}`);
-                                    }
-                                } catch (memberQrError) {
-                                    console.error(`❌ QR code generation failed for team member ${member.email}:`, memberQrError);
-                                }
-
-                                // Collect team members for purchase record
-                                allTeamMembers.add(JSON.stringify({
-                                    name: member.userId.name,
-                                    email: member.userId.email,
-                                    contactNo: member.userId.contactNo || ''
-                                }));
-                            }
-                        }
-
-                        await teamComp.save();
-                        console.log(`✅ Updated team composition: ${teamComp.teamName} (${teamComp.eventName})`);
-                    }
-
-                    // Convert Set back to array of objects
-                    teamMembers = Array.from(allTeamMembers).map(memberStr => JSON.parse(memberStr));
-
-                    // Update purchase with team information
-                    purchase.userDetails.teamMembers = teamMembers;
-                    purchase.mainPersonId = user._id; // Set main person as team leader
-                    console.log(`🎯 Added ${teamMembers.length} team members to purchase record`);
-
-                } else {
-                    console.log('ℹ️ No pending team compositions found for this user');
-                }
-            } catch (teamError) {
-                console.error('❌ Error updating team compositions:', teamError);
-            }
-
-            // Save purchase with team member updates
-            await purchase.save();
-            console.log('💾 Purchase saved with team member data');
-
-            // Send registration email to team leader and all team members
-            try {
-                const emailData = {
-                    name: user.name,
-                    email: user.email,
-                    events: user.events || ['General Registration'],
-                    qrCodeBase64: user.qrCodeBase64,
-                    orderId: purchase.orderId // Pass orderId for ticket link
-                };
-
-                // Send email to team leader (main person)
-                const emailResult = await sendRegistrationEmail(user.email, emailData);
-                if (emailResult.success) {
-                    console.log('✅ Registration email sent successfully to team leader:', user.email);
-                    user.emailSent = true;
-                    user.emailSentAt = new Date();
-                    await user.save();
-                } else {
-                    console.error('❌ Failed to send registration email to team leader:', emailResult.error);
-                }
-
-                // Send emails to all team members
-                if (teamMembers && teamMembers.length > 0) {
-                    console.log(`📧 Sending emails to ${teamMembers.length} team members...`);
-
-                    for (const teamMember of teamMembers) {
-                        try {
-                            // Find the team member's user record to get their QR code
-                            const memberUser = await User.findOne({ email: teamMember.email });
-                            if (memberUser) {
-                                const memberEmailData = {
-                                    name: memberUser.name,
-                                    email: memberUser.email,
-                                    events: memberUser.events || eventNames || ['General Registration'],
-                                    qrCodeBase64: memberUser.qrCodeBase64,
-                                    orderId: purchase.orderId // Pass orderId for ticket link
-                                };
-
-                                const memberEmailResult = await sendRegistrationEmail(memberUser.email, memberEmailData);
-                                if (memberEmailResult.success) {
-                                    console.log('✅ Registration email sent successfully to team member:', memberUser.email);
-                                    memberUser.emailSent = true;
-                                    memberUser.emailSentAt = new Date();
-                                    await memberUser.save();
-                                } else {
-                                    console.error('❌ Failed to send registration email to team member:', memberUser.email, memberEmailResult.error);
-                                }
-                            } else {
-                                console.warn('⚠️ Team member user not found for email:', teamMember.email);
-                            }
-                        } catch (memberEmailError) {
-                            console.error('❌ Error sending email to team member:', teamMember.email, memberEmailError);
-                        }
-                    }
-                }
-
-                // Also send emails to support staff if any
-                try {
-                    const supportStaff = await User.find({
-                        userType: 'support_staff',
-                        events: { $in: user.events || [] },
-                        emailSent: false
-                    });
-
-                    if (supportStaff.length > 0) {
-                        console.log(`📧 Sending emails to ${supportStaff.length} support staff members...`);
-
-                        for (const supportUser of supportStaff) {
-                            const supportEmailData = {
-                                name: supportUser.name,
-                                email: supportUser.email,
-                                events: supportUser.events,
-                                qrCodeBase64: supportUser.qrCodeBase64,
-                                supportRole: supportUser.supportRole
-                            };
-
-                            const supportEmailResult = await sendRegistrationEmail(supportUser.email, supportEmailData);
-                            if (supportEmailResult.success) {
-                                console.log('✅ Registration email sent successfully to support staff:', supportUser.email);
-                                supportUser.emailSent = true;
-                                supportUser.emailSentAt = new Date();
-                                await supportUser.save();
-                            } else {
-                                console.error('❌ Failed to send registration email to support staff:', supportUser.email, supportEmailResult.error);
-                            }
-                        }
-                    }
-                } catch (supportEmailError) {
-                    console.error('❌ Error sending emails to support staff:', supportEmailError);
-                }
-            } catch (emailError) {
-                console.error('❌ Email sending error:', emailError);
-            }
-
-            res.json({
-                success: true,
-                message: 'Payment processed successfully',
-                user: {
-                    id: user._id,
-                    name: user.name,
-                    email: user.email
-                },
-                purchase: {
-                    orderId: purchase.orderId,
-                    status: purchase.paymentStatus
-                }
-            });
         } else {
             console.log('⏳ Payment still pending for order:', orderId);
-
-            // Update purchase status to pending if not successful
-            purchase.paymentStatus = 'pending';
-            await purchase.save();
-
-            res.json({
-                success: true,
-                message: 'Payment is still pending',
-                status: 'pending'
-            });
+            return res.json({ success: true, message: 'Payment is still pending', status: 'pending' });
         }
 
     } catch (error) {
@@ -1180,25 +943,25 @@ router.post('/webhook', async (req, res) => {
             console.log(`✅ Webhook: Payment Success for ${orderId}`);
 
             if (status === 'SUCCESS') {
+                // Store transaction metadata first
                 const purchase = await Purchase.findOne({ orderId: orderId });
+                if (purchase && purchase.paymentStatus !== 'completed') {
+                    purchase.transactionId = data.payment.cf_payment_id;
+                    purchase.paymentMethod = data.payment.payment_method;
+                    await purchase.save();
+                }
 
-                if (purchase) {
-                    if (purchase.paymentStatus !== 'completed') {
-                        purchase.paymentStatus = 'completed';
-                        purchase.paymentCompletedAt = new Date();
-                        purchase.transactionId = data.payment.cf_payment_id;
-                        purchase.paymentMethod = data.payment.payment_method;
-
-                        // NOTE: QR Code generation is typically triggered by user visiting /success
-                        // But we can mark it as paid here to be safe.
-
-                        await purchase.save();
-                        console.log(`💾 DB Updated via Webhook: ${orderId} -> Completed`);
+                // ✅ Trigger full processing (QR generation + email) via shared helper
+                try {
+                    console.log(`🔄 Webhook: triggering processPaymentSuccess for ${orderId}`);
+                    const result = await processPaymentSuccess(orderId);
+                    if (result.success) {
+                        console.log(`✅ Webhook: processPaymentSuccess completed for ${orderId}`);
                     } else {
-                        console.log(`ℹ️ Order ${orderId} already marked as completed.`);
+                        console.error(`❌ Webhook: processPaymentSuccess failed for ${orderId}:`, result.message);
                     }
-                } else {
-                    console.error(`❌ Webhook Error: Purchase not found for ${orderId}`);
+                } catch (processError) {
+                    console.error(`❌ Webhook: Error in processPaymentSuccess for ${orderId}:`, processError);
                 }
             }
         }
