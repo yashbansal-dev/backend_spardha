@@ -13,37 +13,43 @@ const Event = mongoose.model('Event', eventSchema);
 const EVENTS_DATA = [
     // Flagship Events
     { name: 'Leather Cricket (Boys)', price: 400 },
-    { name: 'Leather Cricket (Girls)', price: 0 },
+    { name: 'Leather Cricket (Girls)', price: 1 },
 
-    { name: 'Football (7v7 / 5v5) (Boys)', price: 250 },
-    { name: 'Football (7v7 / 5v5) (Girls)', price: 0 },
+    { name: 'Football (7v7) (Boys)', price: 250 },
+    { name: 'Football (5v5) (Girls)', price: 1 },
 
     // Core Sports
     { name: 'Basketball (Boys)', price: 250 },
-    { name: 'Basketball (Girls)', price: 0 },
+    { name: 'Basketball (Girls)', price: 1 },
 
     { name: 'Volleyball (Boys)', price: 250 },
-    { name: 'Volleyball (Girls)', price: 0 },
+    { name: 'Volleyball (Girls)', price: 1 },
 
     // Racquet Sports
     { name: 'Badminton (Singles) (Boys)', price: 250 },
-    { name: 'Badminton (Singles) (Girls)', price: 0 },
+    { name: 'Badminton (Singles) (Girls)', price: 1 },
 
     { name: 'Badminton (Doubles) (Boys)', price: 500 },
-    { name: 'Badminton (Doubles) (Girls)', price: 0 },
+    { name: 'Badminton (Doubles) (Girls)', price: 1 },
 
-    { name: 'Badminton (Mixed)', price: 250 },
+    { name: 'Badminton (Mixed) (Boys)', price: 250 },
+    { name: 'Badminton (Mixed) (Girls)', price: 1 },
 
     // Fun Events & Others
-    { name: 'Box Cricket', price: 1100 },
-    { name: 'Kabaddi', price: 1100 },
-    { name: 'E-Sports', price: 500 },
+    { name: 'Box Cricket (Boys)', price: 1100 },
+    { name: 'Box Cricket (Girls)', price: 1 },
+
+    { name: 'Kabaddi (Boys)', price: 1100 },
+    { name: 'Kabaddi (Girls)', price: 1 },
+
+    { name: 'E-Sports (Boys)', price: 500 },
+    { name: 'E-Sports (Girls)', price: 1 },
 
     // Strategy
     { name: 'Chess (Boys)', price: 150 },
-    { name: 'Chess (Girls)', price: 0 },
+    { name: 'Chess (Girls)', price: 1 },
 
-    // Generic/Fallback (Optional, for events without categories currently)
+    // Generic/Fallback
     { name: 'General Registration', price: 100 }
 ];
 
@@ -54,9 +60,7 @@ async function seedEvents() {
         console.log('✅ Connected.');
 
         console.log('🧹 Clearing existing events...');
-        // Optional: Only clear if you want to reset everything. 
-        // Comment out the next line if you want to keep existing data.
-        // await Event.deleteMany({}); 
+        await Event.deleteMany({});
 
         console.log('🌱 Seeding Events...');
 
