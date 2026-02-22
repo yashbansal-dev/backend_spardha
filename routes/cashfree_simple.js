@@ -113,23 +113,51 @@ async function processPaymentSuccess(orderId) {
     console.log('✅ Purchase status updated to completed for order:', orderId);
 
     // Process team registrations
-    if (purchase.userDetails.teamMembers && Object.keys(purchase.userDetails.teamMembers).length > 0) {
+    if (purchase.userDetails.teamMembers) {
+        let teamData = purchase.userDetails.teamMembers;
         console.log('👥 Processing Team Registrations...');
-        const teamData = purchase.userDetails.teamMembers;
 
-        for (const [eventId, members] of Object.entries(teamData)) {
-            const matchedItem = purchase.items.find(i => i.itemId === eventId || i.itemId === eventId.replace(/-/g, ' '));
+        // CRITICAL FIX: frontend sometimes sends teamMembers as an array of objects
+        // each object having [eventId]: [members]
+        // Examples: 
+        // 1. { "event-id": [...] }
+        // 2. [ { "event-id": [...] } ]
+
+        let normalizedTeamData = {};
+        if (Array.isArray(teamData)) {
+            console.log('ℹ️ teamMembers is an array, normalizing...');
+            teamData.forEach(item => {
+                if (typeof item === 'object') {
+                    Object.assign(normalizedTeamData, item);
+                }
+            });
+        } else if (typeof teamData === 'object') {
+            normalizedTeamData = teamData;
+        }
+
+        for (const [eventId, members] of Object.entries(normalizedTeamData)) {
+            if (!Array.isArray(members)) continue;
+
+            const matchedItem = purchase.items.find(i =>
+                i.itemId === eventId ||
+                String(i.itemId) === String(eventId) ||
+                i.itemName === eventId ||
+                i.itemName.toLowerCase().replace(/[\(\)\s]/g, '-') === eventId.toLowerCase()
+            );
+
             const eventName = matchedItem ? matchedItem.itemName : eventId;
 
             console.log(`   🏆 Creating Team for: ${eventName}`);
 
             const memberObjects = [];
             for (const m of members) {
-                let memberUser = await User.findOne({ email: m.email });
+                if (!m.email) continue;
+
+                let memberUser = await User.findOne({ email: m.email.toLowerCase().trim() });
                 if (!memberUser) {
                     memberUser = new User({
                         name: m.name,
-                        email: m.email,
+                        email: m.email.toLowerCase().trim(),
                         contactNo: m.phone || '',
                         events: [eventName],
                         isvalidated: false
@@ -170,6 +198,10 @@ async function processPaymentSuccess(orderId) {
         }
         await user.save();
     }
+
+    // Mark as processed
+    purchase.userRegistered = true;
+    await purchase.save();
 
     // ====================================================
     // SEND EMAIL TO MAIN USER
