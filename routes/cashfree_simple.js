@@ -204,32 +204,69 @@ async function processPaymentSuccess(orderId) {
     await purchase.save();
 
     // ====================================================
-    // SEND EMAIL TO MAIN USER
+    // SEND EMAILS TO ALL USERS (MAIN + MEMBERS)
     // ====================================================
     try {
-        const emailData = {
-            name: user.name,
-            email: user.email,
-            events: user.events || ['General Registration'],
-            qrCodeBase64: user.qrCodeBase64,
-            orderId: purchase.orderId
-        };
+        const { sendRegistrationEmail } = require('../utils/emailService');
 
-        const emailResult = await sendRegistrationEmail(user.email, emailData);
-        if (emailResult.success) {
-            console.log('✅ Registration email sent to:', user.email);
-            user.emailSent = true;
-            user.emailSentAt = new Date();
-            await user.save();
-            // ✅ Also mark the purchase as email sent
-            purchase.emailSent = true;
-            purchase.emailSentAt = new Date();
-            await purchase.save();
+        // 1. Send to Main User
+        if (!user.emailSent) {
+            const emailData = {
+                name: user.name,
+                email: user.email,
+                events: user.events || ['General Registration'],
+                qrCodeBase64: user.qrCodeBase64,
+                orderId: purchase.orderId
+            };
+
+            const emailResult = await sendRegistrationEmail(user.email, emailData);
+            if (emailResult.success) {
+                console.log('✅ Registration email sent to main user:', user.email);
+                user.emailSent = true;
+                user.emailSentAt = new Date();
+                await user.save();
+                // ✅ Also mark the purchase as email sent (main part)
+                purchase.emailSent = true;
+                purchase.emailSentAt = new Date();
+                await purchase.save();
+            } else {
+                console.error('❌ Failed to send email to main user:', user.email, emailResult.error);
+            }
         } else {
-            console.error('❌ Failed to send email to:', user.email, emailResult.error);
+            console.log('ℹ️ Email already sent to main user:', user.email);
+        }
+
+        // 2. Send to Team Members
+        const teams = await TeamComposition.find({ purchaseId: purchase._id });
+        for (const team of teams) {
+            console.log(`📧 Processing emails for team: ${team.teamName}`);
+            for (const memberRef of team.teamMembers) {
+                const member = await User.findById(memberRef.userId);
+                if (member && !member.emailSent) {
+                    const memberEmailData = {
+                        name: member.name,
+                        email: member.email,
+                        events: member.events || [team.eventName],
+                        qrCodeBase64: member.qrCodeBase64,
+                        orderId: purchase.orderId
+                    };
+
+                    const result = await sendRegistrationEmail(member.email, memberEmailData);
+                    if (result.success) {
+                        console.log(`✅ Registration email sent to member: ${member.email}`);
+                        member.emailSent = true;
+                        member.emailSentAt = new Date();
+                        await member.save();
+                    } else {
+                        console.error(`❌ Failed to send email to member: ${member.email}`, result.error);
+                    }
+                } else if (member) {
+                    console.log(`ℹ️ Email already sent to member: ${member.email}`);
+                }
+            }
         }
     } catch (emailError) {
-        console.error('❌ Email sending error for main user:', emailError);
+        console.error('❌ Global email sending error in processPaymentSuccess:', emailError);
     }
 
     return { success: true, purchase, user };

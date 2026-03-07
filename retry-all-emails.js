@@ -1,6 +1,6 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const { Purchase, User } = require('./models/models');
+const { Purchase, User, TeamComposition } = require('./models/models');
 const { sendRegistrationEmail } = require('./utils/emailService');
 const { generateUserQRCode } = require('./utils/qrCodeService');
 
@@ -9,72 +9,85 @@ const retryAllEmails = async () => {
         await mongoose.connect(process.env.mongodb);
         console.log('✅ Connected to DB');
 
-        // Get all completed purchases with emailSent: false
-        const purchases = await Purchase.find({
-            paymentStatus: 'completed',
-            emailSent: { $ne: true }
-        }).sort({ purchaseDate: -1 }).limit(10);
+        // 1. Find all completed purchases
+        const completedPurchases = await Purchase.find({
+            paymentStatus: 'completed'
+        }).sort({ purchaseDate: -1 });
 
-        console.log(`Found ${purchases.length} orders needing email...`);
+        console.log(`Checking ${completedPurchases.length} completed orders for unsent emails...`);
 
-        for (const purchase of purchases) {
-            try {
-                console.log(`\n🔄 Processing order: ${purchase.orderId}`);
-                console.log(`  Purchase email: ${purchase.userDetails?.email}`);
+        for (const purchase of completedPurchases) {
+            const userEmailsInThisOrder = [];
 
-                // Try finding user multiple ways
-                let user = null;
+            // Collect main user
+            if (purchase.userId) {
+                const mainUser = await User.findById(purchase.userId);
+                if (mainUser) userEmailsInThisOrder.push({ user: mainUser, type: 'Main User' });
+            } else if (purchase.userDetails?.email) {
+                const mainUser = await User.findOne({ email: purchase.userDetails.email });
+                if (mainUser) userEmailsInThisOrder.push({ user: mainUser, type: 'Main User' });
+            }
 
-                // Method 1: by purchase userId
-                if (purchase.userId) {
-                    user = await User.findById(purchase.userId);
-                    if (user) console.log(`  ✅ Found user by userId: ${user.email}`);
+            // Collect team members
+            const teams = await TeamComposition.find({ purchaseId: purchase._id });
+            for (const team of teams) {
+                for (const memberRef of team.teamMembers) {
+                    const member = await User.findById(memberRef.userId);
+                    if (member) userEmailsInThisOrder.push({ user: member, type: 'Team Member', eventName: team.eventName });
                 }
+            }
 
-                // Method 2: by email
-                if (!user && purchase.userDetails?.email) {
-                    user = await User.findOne({ email: purchase.userDetails.email });
-                    if (user) console.log(`  ✅ Found user by email: ${user.email}`);
+            // Process each user individually
+            for (const { user, type, eventName } of userEmailsInThisOrder) {
+                if (user.emailSent) continue;
+
+                try {
+                    console.log(`\n🔄 Retrying ${type}: ${user.email} (Order: ${purchase.orderId})`);
+
+                    // Ensure they have a QR code
+                    if (!user.qrCodeBase64) {
+                        console.log(`  Generating QR code for ${user.email}...`);
+                        const qrCodeBase64 = await generateUserQRCode(user._id, {
+                            name: user.name,
+                            email: user.email,
+                            events: user.events && user.events.length > 0 ? user.events : (eventName ? [eventName] : []),
+                            orderId: purchase.orderId
+                        });
+                        user.qrCodeBase64 = qrCodeBase64;
+                        await user.save();
+                    }
+
+                    const emailData = {
+                        name: user.name,
+                        email: user.email,
+                        events: user.events && user.events.length > 0 ? user.events : (eventName ? [eventName] : []),
+                        qrCodeBase64: user.qrCodeBase64,
+                        orderId: purchase.orderId
+                    };
+
+                    const result = await sendRegistrationEmail(user.email, emailData);
+                    if (result.success) {
+                        console.log(`  ✅ Email sent to ${user.email}!`);
+                        user.emailSent = true;
+                        user.emailSentAt = new Date();
+                        await user.save();
+
+                        // If it's the main user, sync purchase status
+                        if (type === 'Main User' && !purchase.emailSent) {
+                            purchase.emailSent = true;
+                            purchase.emailSentAt = new Date();
+                            await purchase.save();
+                        }
+                    } else {
+                        console.log(`  ❌ Email failed for ${user.email}: ${result.error}`);
+                    }
+                } catch (err) {
+                    console.error(`  ❌ Error processing ${user.email}:`, err.message);
                 }
-
-                if (!user) {
-                    console.log(`  ❌ User not found for order ${purchase.orderId}, skipping...`);
-                    // Update purchase.userId if we can find user
-                    continue;
-                }
-
-                // Generate fresh QR with orderId
-                const newQrCodeBase64 = await generateUserQRCode(user._id, {
-                    name: user.name,
-                    email: user.email,
-                    events: user.events || [],
-                    orderId: purchase.orderId
-                });
-                user.qrCodeBase64 = newQrCodeBase64;
-                await user.save();
-
-                const emailData = {
-                    name: user.name,
-                    email: user.email,
-                    events: user.events || [],
-                    qrCodeBase64: newQrCodeBase64,
-                    orderId: purchase.orderId
-                };
-
-                const result = await sendRegistrationEmail(user.email, emailData);
-                if (result.success) {
-                    console.log(`  ✅ Email sent to ${user.email}!`);
-                    purchase.emailSent = true;
-                    await purchase.save();
-                } else {
-                    console.log(`  ❌ Email failed: ${result.error}`);
-                }
-            } catch (err) {
-                console.error(`  ❌ Error for order ${purchase.orderId}:`, err.message);
             }
         }
 
-        console.log('\n✅ Done processing all orders.');
+        console.log('\n✅ Done retrying unsent emails.');
     } catch (error) {
         console.error('Error:', error);
     } finally {
