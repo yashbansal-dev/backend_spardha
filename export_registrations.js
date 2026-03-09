@@ -61,6 +61,7 @@ async function exportRegistrations() {
             { header: 'Address', key: 'address', width: 35 },
             { header: 'Events Registered', key: 'events', width: 40 },
             { header: 'Email Verified', key: 'isvalidated', width: 14 },
+            { header: 'Email Sent', key: 'emailSent', width: 12 },
             { header: 'Has Entered', key: 'hasEntered', width: 12 },
             { header: 'Entry Time', key: 'entryTime', width: 20 },
             { header: 'Registered At', key: 'createdAt', width: 20 },
@@ -84,6 +85,7 @@ async function exportRegistrations() {
                 address: user.address || '',
                 events: (user.events || []).join(', '),
                 isvalidated: user.isvalidated ? 'Yes' : 'No',
+                emailSent: user.emailSent ? 'Yes' : 'No',
                 hasEntered: user.hasEntered ? 'Yes' : 'No',
                 entryTime: user.entryTime ? new Date(user.entryTime).toLocaleString('en-IN') : '',
                 createdAt: user.createdAt ? new Date(user.createdAt).toLocaleString('en-IN') : '',
@@ -105,6 +107,8 @@ async function exportRegistrations() {
             { header: 'University', key: 'universityName', width: 30 },
             { header: 'Role', key: 'role', width: 12 },
             { header: 'Team Name', key: 'teamName', width: 20 },
+            { header: 'Email Sent', key: 'emailSent', width: 12 },
+            { header: 'Has Entered', key: 'hasEntered', width: 12 },
         ];
 
         sheet2.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -130,6 +134,8 @@ async function exportRegistrations() {
                     universityName: user.universityName || '',
                     role: 'Individual',
                     teamName: '',
+                    emailSent: user.emailSent ? 'Yes' : 'No',
+                    hasEntered: user.hasEntered ? 'Yes' : 'No',
                 });
             } else {
                 for (const event of events) {
@@ -143,6 +149,8 @@ async function exportRegistrations() {
                         universityName: user.universityName || '',
                         role: teamInfo ? teamInfo.role : 'Individual',
                         teamName: teamInfo ? teamInfo.teamName : '',
+                        emailSent: user.emailSent ? 'Yes' : 'No',
+                        hasEntered: user.hasEntered ? 'Yes' : 'No',
                     });
                 }
             }
@@ -153,7 +161,7 @@ async function exportRegistrations() {
         for (const row of eventRows) {
             sheet2.addRow({ sno: sno2++, ...row });
         }
-        sheet2.autoFilter = { from: 'A1', to: 'I1' };
+        sheet2.autoFilter = { from: 'A1', to: 'K1' };
 
         // ─── Sheet 3: Payment Summary ─────────────────────────────────────────
         const sheet3 = workbook.addWorksheet('Payments');
