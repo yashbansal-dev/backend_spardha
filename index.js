@@ -499,6 +499,16 @@ app.use((req, res) => {
   });
 });
 
+// Convenience redirect for Admin Dashboard
+app.get('/admin.html', (req, res) => {
+  res.redirect('/public/admin.html');
+});
+
+// Helper redirect since user sometimes types it
+app.get('/admin-users.html', (req, res) => {
+  res.redirect('/public/admin-users.html');
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);

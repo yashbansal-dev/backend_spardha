@@ -1043,6 +1043,36 @@ router.post("/retry-email/:orderId", verifyAdmin, async (req, res) => {
   }
 });
 
+// Get all registered users for the admin dashboard
+router.get("/users", verifyAdmin, async (req, res) => {
+  try {
+    const users = await User.find().sort({ createdAt: -1 }).lean();
+
+    // Clean up fields to only return necessary data for Admin panel
+    const dashboardUsers = users.map(user => ({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      contactNo: user.contactNo,
+      universityName: user.universityName,
+      events: user.events || [],
+      isvalidated: user.isvalidated,
+      hasEntered: user.hasEntered,
+      createdAt: user.createdAt
+    }));
+
+    res.json({
+      success: true,
+      count: dashboardUsers.length,
+      data: dashboardUsers
+    });
+  } catch (error) {
+    console.error("Fetch all users error:", error);
+    res.status(500).json({ success: false, message: 'Server error fetching users' });
+  }
+});
+
+
 // Reset email status for a user (admin only)
 router.post("/reset-email-status/:userId", verifyAdmin, async (req, res) => {
   try {

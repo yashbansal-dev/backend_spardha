@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spardha Registered Users</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #020617;
+            /* Spardha Dark */
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #0f172a;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            border: 1px solid #334155;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            color: #E37233;
+            /* Spardha Orange */
+            margin: 0;
+        }
+
+        .back-btn {
+            background-color: #334155;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+
+        .back-btn:hover {
+            background-color: #475569;
+        }
+
+        .search-bar {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background-color: #1e293b;
+            color: white;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #334155;
+        }
+
+        th {
+            background-color: #1e293b;
+            color: #E37233;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background-color: #1e293b;
+        }
+
+        .tag {
+            display: inline-block;
+            background-color: #334155;
+            color: #cbd5e1;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin: 2px;
+        }
+
+        .status-verified {
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        .status-pending {
+            color: #f87171;
+            font-weight: bold;
+        }
+
+        #loading {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+            font-size: 18px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 20px;
+            color: #f87171;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h2>👥 Spardha Registrations (<span id="totalCount">0</span>)</h2>
+            <a href="admin.html" class="back-btn">&larr; Back to Dashboard</a>
+        </div>
+
+        <input type="text" id="searchInput" class="search-bar"
+            placeholder="Search by name, email, phone, or university..." onkeyup="filterTable()">
+
+        <div id="loading">Loading registrations... Please wait.</div>
+
+        <table id="usersTable" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Contact</th>
+                    <th>University</th>
+                    <th>Registered Events</th>
+                    <th>Account Status</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- Rows will be dynamically populated -->
+            </tbody>
+        </table>
+
+        <div id="emptyState" class="empty-state">No matching users found.</div>
+    </div>
+
+    <script>
+        let allUsers = [];
+
+        // Fetch users on load
+        async function fetchUsers() {
+            try {
+                const response = await fetch('/admin/users');
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/admin.html';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    allUsers = data.data;
+                    document.getElementById('totalCount').innerText = allUsers.length;
+                    renderTable(allUsers);
+
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('usersTable').style.display = 'table';
+                } else {
+                    alert('Failed to load users: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error fetching users:', error);
+                document.getElementById('loading').innerText = 'Error loading data. Make sure you are logged in.';
+            }
+        }
+
+        function renderTable(users) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            if (users.length === 0) {
+                document.getElementById('usersTable').style.display = 'none';
+                document.getElementById('emptyState').style.display = 'block';
+                return;
+            }
+
+            document.getElementById('usersTable').style.display = 'table';
+            document.getElementById('emptyState').style.display = 'none';
+
+            users.forEach(user => {
+                const tr = document.createElement('tr');
+
+                // Events rendering
+                const eventsHtml = (user.events || [])
+                    .map(event => `<span class="tag">${event}</span>`)
+                    .join('');
+
+                // Status rendering
+                const statusHtml = user.isvalidated
+                    ? '<span class="status-verified">Verified</span>'
+                    : '<span class="status-pending">Unverified</span>';
+
+                tr.innerHTML = `
+                <td><strong>${user.name || 'N/A'}</strong></td>
+                <td>
+                    ${user.email || 'N/A'}<br>
+                    <small style="color: #94a3b8">${user.contactNo || ''}</small>
+                </td>
+                <td>${user.universityName || 'N/A'}</td>
+                <td>${eventsHtml || '<span style="color: #64748b;">None</span>'}</td>
+                <td>${statusHtml}</td>
+            `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterTable() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+
+            const filtered = allUsers.filter(user => {
+                return (
+                    (user.name && user.name.toLowerCase().includes(query)) ||
+                    (user.email && user.email.toLowerCase().includes(query)) ||
+                    (user.contactNo && String(user.contactNo).includes(query)) ||
+                    (user.universityName && user.universityName.toLowerCase().includes(query)) ||
+                    (user.events && user.events.some(e => e.toLowerCase().includes(query)))
+                );
+            });
+
+            renderTable(filtered);
+        }
+
+        // Trigger initial fetch
+        window.onload = fetchUsers;
+    </script>
+
+</body>
+
+</html>
