@@ -38,18 +38,22 @@ async function checkDB() {
     } catch (err) {
         console.error('❌ Error:', err.message);
     } finally {
+        // 3. Check Team Compositions
+        try {
+            const teamCount = await TeamComposition.countDocuments();
+            console.log(`\n🏆 Total Teams: ${teamCount}`);
+            const teams = await TeamComposition.find().sort({ _id: -1 }).limit(5);
+            teams.forEach(t => {
+                console.log(`\n🛡️  [${t._id}] ${t.teamName} (${t.eventName})`);
+                console.log(`   👑 Leader: ${t.teamLeader.name} (${t.teamLeader.email})`);
+                console.log(`   👥 Members (${t.teamMembers.length}): ${t.teamMembers.map(m => m.name).join(', ')}`);
+            });
+        } catch (teamError) {
+            console.error('❌ Error checking teams:', teamError.message);
+        }
+
         await mongoose.disconnect();
         console.log('\n👋 Disconnected.');
-        // 3. Check Team Compositions
-        const teamCount = await TeamComposition.countDocuments();
-        console.log(`\n🏆 Total Teams: ${teamCount}`);
-        const teams = await TeamComposition.find().sort({ _id: -1 }).limit(5);
-        teams.forEach(t => {
-            console.log(`\n🛡️  [${t._id}] ${t.teamName} (${t.eventName})`);
-            console.log(`   👑 Leader: ${t.teamLeader.name} (${t.teamLeader.email})`);
-            console.log(`   👥 Members (${t.teamMembers.length}): ${t.teamMembers.map(m => m.name).join(', ')}`);
-        });
-
         console.log('\n=================================\n');
         process.exit(0);
     }

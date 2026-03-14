@@ -136,6 +136,44 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieparser());
 
+// Dynamically generate and serve Excel export
+app.get('/public/registrations_export.xlsx', async (req, res) => {
+  try {
+    const { generateExcelReport } = require('./utils/excelExport');
+    const outputPath = path.join(__dirname, 'public', 'registrations_export.xlsx');
+
+    if (!fs.existsSync(path.join(__dirname, 'public'))) {
+      fs.mkdirSync(path.join(__dirname, 'public'), { recursive: true });
+    }
+
+    await generateExcelReport(outputPath);
+    res.download(outputPath);
+  } catch (err) {
+    console.error('Error generating excel on the fly:', err);
+    res.status(500).send('Error generating Excel file');
+  }
+});
+
+app.get('/uploads/registrations_export.xlsx', async (req, res) => {
+  try {
+    const { generateExcelReport } = require('./utils/excelExport');
+    const outputPath = process.env.NODE_ENV === 'production'
+      ? '/app/uploads/registrations_export.xlsx'
+      : path.join(__dirname, 'public', 'registrations_export.xlsx');
+
+    const dir = path.dirname(outputPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    await generateExcelReport(outputPath);
+    res.download(outputPath);
+  } catch (err) {
+    console.error('Error generating excel on the fly:', err);
+    res.status(500).send('Error generating Excel file');
+  }
+});
+
 // Serve static files from public directory
 app.use('/public', express.static(path.join(__dirname, 'public')));
 

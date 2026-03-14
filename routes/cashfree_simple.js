@@ -61,6 +61,7 @@ async function processPaymentSuccess(orderId) {
             universityName: purchase.userDetails.universityName || '',
             address: purchase.userDetails.address || '',
             universityIdCard: purchase.userDetails.formData?.universityIdCard || '',
+            referralCode: purchase.userDetails.formData?.referralCode || '',
             events: eventNames.length > 0 ? eventNames : ['General Registration'],
             isvalidated: true
         });
@@ -71,6 +72,7 @@ async function processPaymentSuccess(orderId) {
         if (purchase.userDetails.universityName) user.universityName = purchase.userDetails.universityName;
         if (purchase.userDetails.address) user.address = purchase.userDetails.address;
         if (purchase.userDetails.formData?.universityIdCard) user.universityIdCard = purchase.userDetails.formData.universityIdCard;
+        if (purchase.userDetails.formData?.referralCode) user.referralCode = purchase.userDetails.formData.referralCode;
 
         if (eventNames.length > 0) {
             const currentEvents = user.events || [];
@@ -267,6 +269,32 @@ async function processPaymentSuccess(orderId) {
         }
     } catch (emailError) {
         console.error('❌ Global email sending error in processPaymentSuccess:', emailError);
+    }
+
+    // ====================================================
+    // DYNAMIC EXCEL REGENERATION
+    // ====================================================
+    try {
+        const { generateExcelReport } = require('../utils/excelExport');
+        const outputPath = process.env.NODE_ENV === 'production'
+            ? '/app/uploads/registrations_export.xlsx'
+            : path.join(__dirname, '..', 'public', 'registrations_export.xlsx');
+
+        // Ensure directory exists
+        const dir = path.dirname(outputPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        console.log(`📊 Regenerating latest Excel report to ${outputPath}...`);
+        const excelResult = await generateExcelReport(outputPath);
+        if (excelResult.success) {
+            console.log('✅ Dynamic Excel report successfully regenerated.');
+        } else {
+            console.error('❌ Failed to regenerate Excel report dynamically:', excelResult.error);
+        }
+    } catch (excelErr) {
+        console.error('❌ Error during dynamic Excel regeneration:', excelErr);
     }
 
     return { success: true, purchase, user };

@@ -4,6 +4,7 @@ const { User, Event, Purchase, TeamComposition } = require("../models/models");
 const { verifyAdmin } = require("../middleware/auth");
 const { sendRegistrationEmail } = require("../utils/emailService");
 const { analyzeCommitteeReferrals } = require("../analyze-committee-referrals");
+const { generateExcelReport } = require("../utils/excelExport");
 const path = require('path');
 const fs = require('fs');
 const router = express.Router();
@@ -1557,10 +1558,11 @@ router.get("/export/users", verifyAdmin, async (req, res) => {
       'Has Entered',
       'Entry Time',
       'Email Sent',
-      'Registration Type',
       'Team Name',
       'Team Event',
       'Team Leader',
+      'Referral Code',
+      'University ID Card',
       'Created At'
     ];
 
@@ -1577,6 +1579,8 @@ router.get("/export/users", verifyAdmin, async (req, res) => {
       participant.teamInfo?.teamName || '',
       participant.teamInfo?.eventName || '',
       participant.teamInfo?.teamLeader || '',
+      participant.referralCode || '',
+      participant.universityIdCard || '',
       participant.createdAt ? new Date(participant.createdAt).toLocaleString() : ''
     ]);
 
@@ -4093,6 +4097,43 @@ router.get("/export-csv", verifyAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error exporting CSV:', error);
     res.status(500).send('Error generating export');
+  }
+});
+
+// Generate Excel Report (admin only)
+router.get("/generate-excel", verifyAdmin, async (req, res) => {
+  try {
+    let outputPath;
+    if (process.env.NODE_ENV === 'production') {
+      outputPath = '/app/uploads/registrations_export.xlsx';
+    } else {
+      outputPath = path.join(__dirname, '..', 'public', 'registrations_export.xlsx');
+    }
+
+    const result = await generateExcelReport(outputPath);
+
+    if (result.success) {
+      const baseUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+      const fileUrl = process.env.NODE_ENV === 'production'
+        ? `${baseUrl}/uploads/registrations_export.xlsx`
+        : `${baseUrl}/public/registrations_export.xlsx`;
+
+      res.json({
+        success: true,
+        message: 'Excel report generated successfully',
+        link: fileUrl,
+        stats: result.stats
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate Excel report',
+        error: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Error generating Excel report:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +8,8 @@
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #020617; /* Spardha Dark */
+            background-color: #020617;
+            /* Spardha Dark */
             color: #ffffff;
             display: flex;
             justify-content: center;
@@ -15,6 +17,7 @@
             height: 100vh;
             margin: 0;
         }
+
         .container {
             background-color: #0f172a;
             padding: 40px;
@@ -24,19 +27,24 @@
             max-width: 400px;
             border: 1px solid #334155;
         }
+
         h2 {
             text-align: center;
-            color: #E37233; /* Spardha Orange */
+            color: #E37233;
+            /* Spardha Orange */
             margin-bottom: 30px;
         }
+
         .form-group {
             margin-bottom: 20px;
         }
+
         label {
             display: block;
             margin-bottom: 8px;
             color: #cbd5e1;
         }
+
         input {
             width: 100%;
             padding: 12px;
@@ -46,6 +54,7 @@
             color: white;
             box-sizing: border-box;
         }
+
         button {
             width: 100%;
             padding: 12px;
@@ -58,20 +67,30 @@
             font-size: 16px;
             margin-top: 10px;
         }
+
         button:hover {
             opacity: 0.9;
         }
+
         .message {
             margin-top: 20px;
             text-align: center;
             font-size: 14px;
         }
-        .success { color: #4ade80; }
-        .error { color: #f87171; }
-        
+
+        .success {
+            color: #4ade80;
+        }
+
+        .error {
+            color: #f87171;
+        }
+
         /* Dashboard View (Hidden by default) */
-        #dashboard { display: none; }
-        
+        #dashboard {
+            display: none;
+        }
+
         .tool-card {
             background-color: #1e293b;
             padding: 15px;
@@ -79,6 +98,7 @@
             margin-bottom: 15px;
             border-left: 4px solid #E37233;
         }
+
         .tool-link {
             display: block;
             color: #E37233;
@@ -86,12 +106,14 @@
             font-weight: bold;
             margin-top: 5px;
         }
+
         .logout-btn {
             background: #334155;
             margin-top: 20px;
         }
     </style>
 </head>
+
 <body>
 
     <div class="container" id="loginForm">
@@ -116,12 +138,20 @@
 
         <div class="tool-card">
             <strong>📊 Analytics Dashboard</strong>
-            <p style="font-size: 13px; color: #94a3b8; margin: 5px 0;">View revenue, registration counts, and charts.</p>
+            <p style="font-size: 13px; color: #94a3b8; margin: 5px 0;">View revenue, registration counts, and charts.
+            </p>
             <a href="/admin/analytics/dashboard" target="_blank" class="tool-link">Open Dashboard &rarr;</a>
         </div>
 
         <div class="tool-card">
-            <strong>📥 Export Participants</strong>
+            <strong>📁 Generate Excel Report</strong>
+            <p style="font-size: 13px; color: #94a3b8; margin: 5px 0;">Generate/Update the registrations Excel file on
+                the server.</p>
+            <a href="/admin/generate-excel" target="_blank" class="tool-link">Generate Now &rarr;</a>
+        </div>
+
+        <div class="tool-card">
+            <strong>📥 Export Participants (CSV)</strong>
             <p style="font-size: 13px; color: #94a3b8; margin: 5px 0;">Download full CSV of all registered users.</p>
             <a href="/admin/export/participants" target="_blank" class="tool-link">Download CSV &rarr;</a>
         </div>
@@ -138,7 +168,7 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const msg = document.getElementById('msg');
-            
+
             msg.textContent = 'Logging in...';
             msg.className = 'message';
 
@@ -169,7 +199,7 @@
         }
 
         async function logout() {
-             try {
+            try {
                 await fetch('/logout', { method: 'POST' });
                 window.location.reload();
             } catch (e) {
@@ -179,4 +209,5 @@
     </script>
 
 </body>
+
 </html>

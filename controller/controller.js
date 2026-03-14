@@ -101,6 +101,7 @@ async function signup(req, res) {
       email: req.body.email,
       password: hashedPassword, // Store the hashed password
       referalID: referralID,
+      referralCode: req.body.referralCode || ""
     });
 
     // Generate QR code as base64

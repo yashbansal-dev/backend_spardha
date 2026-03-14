@@ -32,6 +32,21 @@ const userSchema = new mongoose.Schema({
     default: ""
   },
 
+  // Referral tracking
+  referralCode: {
+    type: String,
+    default: ""
+  },
+  referalID: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  referalcount: {
+    type: Number,
+    default: 0
+  },
+
   // User details captured from checkout form
   contactNo: {
     type: String,
