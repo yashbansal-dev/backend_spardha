@@ -681,7 +681,7 @@ router.post('/create-order', async (req, res) => {
                 return Promise.race([
                     cashfree.PGCreateOrder(orderReq),
                     new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('Cashfree API timeout')), 10000)
+                        setTimeout(() => reject(new Error('Cashfree API timeout')), 30000)
                     )
                 ]);
             };
@@ -728,7 +728,7 @@ router.post('/create-order', async (req, res) => {
         console.error('Global Create Order Error:', error);
         res.status(500).json({
             success: false,
-            message: 'Server Error',
+            message: error.message || 'Server Error',
             error: error.message
         });
     }
