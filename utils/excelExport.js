@@ -132,9 +132,9 @@ async function generateExcelReport(outputPath) {
             sheet1.addRow(rowData);
         }
 
-        // --- Sheet 2: Event-wise ---
-        const sheet2 = workbook.addWorksheet('Event-wise');
-        sheet2.columns = [
+        // --- Sheet 2: Event-wise (Consolidated) ---
+        const sheet2 = workbook.addWorksheet('Event-wise Summary');
+        const eventColumnHeaders = [
             { header: 'S.No', key: 'sno', width: 6 },
             { header: 'Event', key: 'event', width: 30 },
             { header: 'Name', key: 'name', width: 25 },
@@ -154,6 +154,7 @@ async function generateExcelReport(outputPath) {
             { header: 'Has Entered', key: 'hasEntered', width: 12 },
             { header: 'Registered At', key: 'createdAt', width: 20 },
         ];
+        sheet2.columns = eventColumnHeaders;
 
         sheet2.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
         sheet2.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
@@ -161,18 +162,20 @@ async function generateExcelReport(outputPath) {
         sheet2.views = [{ state: 'frozen', ySplit: 1 }];
         sheet2.autoFilter = {
             from: { row: 1, column: 1 },
-            to: { row: 1, column: sheet2.columns.length }
+            to: { row: 1, column: eventColumnHeaders.length }
         };
 
         let sno2 = 1;
         const eventRows = [];
+        const usersByEvent = {};
+
         for (const user of users) {
             const userId = user._id.toString();
             const userTeams = teamMap[userId] || [];
             const events = user.events || [];
 
             if (events.length === 0) {
-                eventRows.push({
+                const row = {
                     event: 'N/A',
                     name: user.name || '',
                     email: user.email || '',
@@ -190,11 +193,14 @@ async function generateExcelReport(outputPath) {
                     emailSent: user.emailSent ? 'Yes' : 'No',
                     hasEntered: user.hasEntered ? 'Yes' : 'No',
                     createdAt: user.createdAt ? new Date(user.createdAt).toLocaleString('en-IN') : '',
-                });
+                };
+                eventRows.push(row);
+                if (!usersByEvent['N/A']) usersByEvent['N/A'] = [];
+                usersByEvent['N/A'].push(row);
             } else {
                 for (const event of events) {
                     const teamInfo = userTeams.find(t => t.eventName === event);
-                    eventRows.push({
+                    const row = {
                         event,
                         name: user.name || '',
                         email: user.email || '',
@@ -212,14 +218,52 @@ async function generateExcelReport(outputPath) {
                         emailSent: user.emailSent ? 'Yes' : 'No',
                         hasEntered: user.hasEntered ? 'Yes' : 'No',
                         createdAt: user.createdAt ? new Date(user.createdAt).toLocaleString('en-IN') : '',
-                    });
+                    };
+                    eventRows.push(row);
+                    if (!usersByEvent[event]) usersByEvent[event] = [];
+                    usersByEvent[event].push(row);
                 }
             }
         }
 
-        eventRows.sort((a, b) => a.event.localeCompare(b.event));
+        // Sort consolidated event rows
+        eventRows.sort((a, b) => a.event.localeCompare(b.event) || a.name.localeCompare(b.name));
         for (const row of eventRows) {
             sheet2.addRow({ sno: sno2++, ...row });
+        }
+
+        // --- Sheet 2.x: Dynamic Individual Event Sheets ---
+        console.log(`📑 Creating individual sheets for ${Object.keys(usersByEvent).length} events...`);
+        const sortedEventNames = Object.keys(usersByEvent).sort();
+
+        for (const eventName of sortedEventNames) {
+            if (eventName === 'N/A') continue;
+
+            // Sanitize sheet name: max 31 chars, no invalid characters [ ] * / ? : \
+            let safeSheetName = eventName.replace(/[\[\]\*\/\?\:\\ ]/g, '_').substring(0, 31);
+            if (!safeSheetName) safeSheetName = 'Event_Data';
+
+            // Avoid duplicate sheet names (if truncation causes collision)
+            let finalSheetName = safeSheetName;
+            let counter = 1;
+            while (workbook.getWorksheet(finalSheetName)) {
+                finalSheetName = `${safeSheetName.substring(0, 28)}_${counter++}`;
+            }
+
+            const eventSheet = workbook.addWorksheet(finalSheetName);
+            // Use same columns as Event-wise but omit the 'Event' column itself if desired, or keep for clarity
+            eventSheet.columns = eventColumnHeaders;
+
+            eventSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            eventSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFED7D31' } };
+            eventSheet.getRow(1).alignment = { horizontal: 'center' };
+            eventSheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+            let eventSno = 1;
+            const sortedRows = usersByEvent[eventName].sort((a, b) => a.name.localeCompare(b.name));
+            for (const row of sortedRows) {
+                eventSheet.addRow({ sno: eventSno++, ...row });
+            }
         }
 
         // --- Sheet 3: Payments ---
