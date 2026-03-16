@@ -554,36 +554,60 @@ router.post('/create-order', async (req, res) => {
 
         for (const item of items) {
             // Identify event by name/title
-            const eventName = item.title || item.itemName || item.name;
-            const category = item.category;
+            const eventName = (item.title || item.itemName || item.name || '').trim();
+            const category = (item.category || '').trim();
 
             if (!eventName) {
                 console.warn('⚠️ Item missing name/title:', item);
                 continue;
             }
 
-            // Smart Lookup: Try specific variant first, then generic
+            console.log(`🔍 Searching for event: "${eventName}" (Category: "${category}")`);
+
+            // Helper to escape regex special characters
+            const escapeRegex = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+            // Smart Lookup Logic:
             let event = null;
-            let lookupName = eventName;
 
-            // 1. Try "Event Name (Category)" e.g., "Football (Boys)"
-            if (category && category !== 'Open') {
-                const catFormatted = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
-                const specificName = `${eventName} (${catFormatted})`;
+            // 1. Try case-insensitive exact match
+            event = await Event.findOne({ name: { $regex: `^${escapeRegex(eventName)}$`, $options: 'i' } });
 
-                event = await Event.findOne({ name: specificName });
-                if (event) {
-                    lookupName = specificName;
+            // 2. Try "Event (Category)" variant
+            if (!event && category && category !== 'Open') {
+                const specificName = `${eventName} (${category})`;
+                console.log(`🔍 Trying specific variant: "${specificName}"`);
+                event = await Event.findOne({ name: { $regex: `^${escapeRegex(specificName)}$`, $options: 'i' } });
+
+                // Try reverse: if eventName already has category but frontend sent both
+                if (!event && eventName.toLowerCase().includes(category.toLowerCase())) {
+                    event = await Event.findOne({ name: { $regex: `^${escapeRegex(eventName)}$`, $options: 'i' } });
                 }
             }
 
-            // 2. Fallback to generic "Event Name"
+            // 3. Last resort: Partial match logic
             if (!event) {
-                event = await Event.findOne({ name: eventName });
+                console.log(`🔍 Trying partial match for: "${eventName}"`);
+                // Find all events starting with this name or containing it
+                const matches = await Event.find({ name: { $regex: `${escapeRegex(eventName)}`, $options: 'i' } });
+                if (matches.length === 1) {
+                    event = matches[0];
+                    console.log(`✅ Auto-matched partial: "${eventName}" -> "${event.name}"`);
+                } else if (matches.length > 1) {
+                    // Try to find one that matches the category if available
+                    if (category) {
+                        event = matches.find(m => m.name.toLowerCase().includes(category.toLowerCase()));
+                        if (event) console.log(`✅ Auto-matched multi-partial with category: "${event.name}"`);
+                    }
+                    // If still no event, pick the first one as a best guess IF it's an exact match in some way
+                    if (!event) {
+                        event = matches.find(m => m.name.toLowerCase() === eventName.toLowerCase());
+                    }
+                }
             }
 
             if (!event) {
-                console.error(`❌ Event not found in DB: "${eventName}" (checked variant: "${lookupName}")`);
+                console.error(`❌ Event NOT found: "${eventName}"`);
                 missingEvents.push(eventName);
                 continue;
             }
@@ -599,7 +623,7 @@ router.post('/create-order', async (req, res) => {
                 type: 'event',
                 itemId: event._id,
                 itemName: event.name,
-                price: realPrice, // Enforce DB price
+                price: realPrice,
                 quantity: quantity
             });
 
