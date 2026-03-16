@@ -13,7 +13,7 @@ const router = express.Router();
 // SHARED HELPER: Process a completed payment (QR + Email)
 // Called from both GET /success/:orderId and the Webhook handler
 // -----------------------------------------------------------------------
-async function processPaymentSuccess(orderId) {
+async function processPaymentSuccess(orderId, paymentData = null) {
     console.log('🎉 processPaymentSuccess called for order:', orderId);
 
     const purchase = await Purchase.findOne({ orderId });
@@ -22,17 +22,34 @@ async function processPaymentSuccess(orderId) {
         return { success: false, message: 'Purchase not found' };
     }
 
-    // Skip ONLY if already fully processed (payment done + email sent)
-    // If payment is done but email failed previously, fall through and retry the email
+    // Update transaction details if provided (even if already completed, to backfill missing data)
+    let updatedFields = false;
+    if (paymentData) {
+        if (paymentData.transactionId && purchase.transactionId !== paymentData.transactionId) {
+            purchase.transactionId = paymentData.transactionId;
+            updatedFields = true;
+        }
+        if (paymentData.paymentMethod && purchase.paymentMethod !== paymentData.paymentMethod) {
+            purchase.paymentMethod = paymentData.paymentMethod;
+            updatedFields = true;
+        }
+    }
+
+    // Skip full processing ONLY if already fully processed (payment done + email sent)
     if (purchase.paymentStatus === 'completed' && purchase.emailSent === true) {
+        if (updatedFields) {
+            await purchase.save();
+            console.log('✅ Updated transaction details for already completed order:', orderId);
+        }
         console.log('✅ Payment already fully processed (email sent) for order:', orderId);
         return { success: true, alreadyProcessed: true, purchase };
     }
 
-    // Mark as completed (only if not already marked — might be a retry for failed email)
+    // Mark as completed
     if (purchase.paymentStatus !== 'completed') {
         purchase.paymentStatus = 'completed';
         purchase.paymentCompletedAt = new Date();
+        updatedFields = true;
     }
 
     // Extract event names from purchase items
@@ -1004,25 +1021,44 @@ router.get('/success/:orderId', async (req, res) => {
             }
         }
 
-        // After retries — process if SUCCESS, or process anyway as a safety net
-        // (the webhook may have already marked it — processPaymentSuccess is idempotent)
+        // After retries — process ONLY if SUCCESS
         if (paymentStatus === 'SUCCESS') {
             console.log('✅ Payment confirmed SUCCESS — processing now');
+
+            // Try to get the latest transaction details to pass to processPaymentSuccess
+            let paymentData = null;
+            try {
+                const response = await cashfree.PGOrderFetchPayments(orderId);
+                const payments = response.data;
+                if (payments && payments.length > 0) {
+                    const latest = payments[payments.length - 1];
+                    paymentData = {
+                        transactionId: latest.cf_payment_id,
+                        paymentMethod: latest.payment_method
+                    };
+                }
+            } catch (err) {
+                console.warn('⚠️ Could not fetch transaction details for success page, but payment is SUCCESS:', err.message);
+            }
+
+            const result = await processPaymentSuccess(orderId, paymentData);
+
+            if (result.success) {
+                return res.json({
+                    success: true,
+                    message: result.alreadyProcessed ? 'Payment already processed' : 'Payment processed successfully',
+                    user: result.user ? { id: result.user._id, name: result.user.name, email: result.user.email } : undefined,
+                    purchase: result.purchase ? { orderId: result.purchase.orderId, status: result.purchase.paymentStatus } : undefined
+                });
+            } else {
+                return res.status(404).json({ success: false, message: result.message });
+            }
         } else {
-            console.log(`⚠️ Payment status still "${paymentStatus}" after ${MAX_RETRIES} retries — processing anyway as safety net`);
-        }
-
-        const result = await processPaymentSuccess(orderId);
-
-        if (result.success) {
-            return res.json({
-                success: true,
-                message: result.alreadyProcessed ? 'Payment already processed' : 'Payment processed successfully',
-                user: result.user ? { id: result.user._id, name: result.user.name, email: result.user.email } : undefined,
-                purchase: result.purchase ? { orderId: result.purchase.orderId, status: result.purchase.paymentStatus } : undefined
+            console.log(`❌ Payment status "${paymentStatus}" — not processing success`);
+            return res.status(400).json({
+                success: false,
+                message: `Payment not confirmed. Status: ${paymentStatus}. If money was deducted, it will be updated soon via webhook.`
             });
-        } else {
-            return res.status(404).json({ success: false, message: result.message });
         }
 
     } catch (error) {
@@ -1070,7 +1106,11 @@ router.post('/webhook', async (req, res) => {
                 // ✅ Trigger full processing (QR generation + email) via shared helper
                 try {
                     console.log(`🔄 Webhook: triggering processPaymentSuccess for ${orderId}`);
-                    const result = await processPaymentSuccess(orderId);
+                    const paymentData = {
+                        transactionId: data.payment.cf_payment_id,
+                        paymentMethod: data.payment.payment_method
+                    };
+                    const result = await processPaymentSuccess(orderId, paymentData);
                     if (result.success) {
                         console.log(`✅ Webhook: processPaymentSuccess completed for ${orderId}`);
                     } else {
@@ -1101,4 +1141,7 @@ router.post('/webhook', async (req, res) => {
     }
 });
 
-module.exports = router;
+module.exports = {
+    router,
+    processPaymentSuccess
+};
