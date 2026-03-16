@@ -466,7 +466,7 @@ app.use("/api", apirouter); // This might be the auth router, or a general API r
 app.use("/admin", adminrouter);
 
 // Payment routes
-const paymentRouter = require("./routes/cashfree_simple");
+const { router: paymentRouter } = require("./routes/cashfree_simple");
 app.use("/api/payments", paymentRouter);
 
 
