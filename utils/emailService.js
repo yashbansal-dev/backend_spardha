@@ -1,6 +1,7 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const { Resend } = require('resend');
+const { generateInvoicePDF, generateTicketPosterPDF } = require('./pdfService');
 
 // Initialize Resend (Primary Provider)
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -257,20 +258,47 @@ Team Spardha'26
 }
 
 /**
- * Send registration email to user with QR code attachment
+ * Send registration email to user with QR code, Ticket PDF, and Invoice PDF
  */
 async function sendRegistrationEmail(userEmail, userData) {
     try {
+        console.log(`📧 Preparing registration email for ${userEmail}...`);
         const { htmlContent, textContent } = generateRegistrationEmailContent(userData);
         const attachments = [];
 
-        // Add QR code as attachment if available
+        // 1. Add QR code as image attachment (standard)
         if (userData.qrCodeBase64) {
             attachments.push({
-                filename: `spardha26-ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
+                filename: `spardha26-qr-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
                 content: Buffer.from(userData.qrCodeBase64, 'base64'),
                 contentType: "image/png"
             });
+        }
+
+        // 2. Generate and add Formal Invoice PDF
+        try {
+            console.log('📄 Generating Invoice PDF...');
+            const invoiceBuffer = await generateInvoicePDF(userData);
+            attachments.push({
+                filename: `Invoice-${userData.orderId}.pdf`,
+                content: invoiceBuffer,
+                contentType: 'application/pdf'
+            });
+        } catch (invError) {
+            console.error('❌ Failed to generate Invoice PDF:', invError.message);
+        }
+
+        // 3. Generate and add Digital Ticket / Poster PDF
+        try {
+            console.log('🎫 Generating Digital Ticket PDF...');
+            const ticketBuffer = await generateTicketPosterPDF(userData);
+            attachments.push({
+                filename: `Spardha26-Ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.pdf`,
+                content: ticketBuffer,
+                contentType: 'application/pdf'
+            });
+        } catch (tickError) {
+            console.error('❌ Failed to generate Ticket PDF:', tickError.message);
         }
 
         const result = await sendEmailWithFallback({

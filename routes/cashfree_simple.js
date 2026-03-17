@@ -240,7 +240,15 @@ async function processPaymentSuccess(orderId, paymentData = null) {
                 email: user.email,
                 events: user.events || ['General Registration'],
                 qrCodeBase64: user.qrCodeBase64,
-                orderId: purchase.orderId
+                orderId: purchase.orderId,
+                // Additional data for Invoice/Ticket PDF
+                universityName: user.universityName || purchase.userDetails?.universityName || '',
+                totalAmount: purchase.amount || 0,
+                items: (purchase.events || []).map(event => ({
+                    itemName: event,
+                    price: (purchase.amount || 0) / (purchase.events?.length || 1), // Estimated per-item price
+                    quantity: 1
+                }))
             };
 
             const emailResult = await sendRegistrationEmail(user.email, emailData);
@@ -272,7 +280,15 @@ async function processPaymentSuccess(orderId, paymentData = null) {
                         email: member.email,
                         events: member.events || [team.eventName],
                         qrCodeBase64: member.qrCodeBase64,
-                        orderId: purchase.orderId
+                        orderId: purchase.orderId,
+                        // Additional data for Invoice/Ticket PDF
+                        universityName: member.universityName || purchase.userDetails?.universityName || '',
+                        totalAmount: purchase.amount || 0,
+                        items: (purchase.events || []).map(event => ({
+                            itemName: event,
+                            price: (purchase.amount || 0) / (purchase.events?.length || 1),
+                            quantity: 1
+                        }))
                     };
 
                     const result = await sendRegistrationEmail(member.email, memberEmailData);
