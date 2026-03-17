@@ -1,7 +1,11 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// Create reusable transporter object using the default SMTP transport
+// Initialize Resend (Primary Provider)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+// Create reusable Gmail transporter (Fallback Provider)
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -9,6 +13,73 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS
     }
 });
+
+/**
+ * Shared helper to send email with Resend primary and Gmail fallback
+ */
+async function sendEmailWithFallback(options) {
+    const { to, subject, text, html, attachments, fromName = "Spardha'26 Team" } = options;
+    const errors = [];
+
+    // 1. Try Resend (Primary)
+    if (resend) {
+        try {
+            console.log(`🚀 Attempting Resend for ${to}...`);
+            const resendFrom = process.env.RESEND_FROM_EMAIL || 'no-reply@spardha.jklu.edu.in';
+            
+            // Format attachments for Resend if they exist
+            const resendAttachments = attachments ? attachments.map(att => ({
+                filename: att.filename,
+                content: att.content.toString('base64') // Resend expects base64 or Buffer
+            })) : [];
+
+            const { data, error } = await resend.emails.send({
+                from: `${fromName} <${resendFrom}>`,
+                to: [to],
+                subject: subject,
+                text: text,
+                html: html,
+                attachments: resendAttachments
+            });
+
+            if (data) {
+                console.log(`✅ Resend success: ${to}. ID: ${data.id}`);
+                return { success: true, provider: 'resend', result: data };
+            }
+            if (error) {
+                console.warn(`⚠️ Resend API returned error for ${to}:`, error);
+                errors.push({ provider: 'resend', error });
+            }
+        } catch (err) {
+            console.error(`❌ Resend exception for ${to}:`, err.message);
+            errors.push({ provider: 'resend', error: err.message });
+        }
+    } else {
+        console.log('ℹ️ Resend API Key not found, skipping primary provider.');
+    }
+
+    // 2. Fallback to Gmail
+    console.log(`🔄 Falling back to Gmail for ${to}...`);
+    try {
+        const mailOptions = {
+            from: `"${fromName}" <${process.env.EMAIL_USER}>`,
+            to: to,
+            subject: subject,
+            text: text,
+            html: html,
+            attachments: attachments || []
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ Gmail fallback success: ${to}. ID: ${info.messageId}`);
+        return { success: true, provider: 'gmail', result: info };
+    } catch (err) {
+        console.error(`❌ Gmail fallback also failed for ${to}:`, err.message);
+        errors.push({ provider: 'gmail', error: err.message });
+    }
+
+    return { success: false, errors };
+}
 
 /**
  * Generate registration email content
@@ -190,40 +261,30 @@ Team Spardha'26
  */
 async function sendRegistrationEmail(userEmail, userData) {
     try {
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            throw new Error("Missing EMAIL_USER or EMAIL_PASS in environment variables");
-        }
-
         const { htmlContent, textContent } = generateRegistrationEmailContent(userData);
-
-        const mailOptions = {
-            from: `"Spardha'26 Team" <${process.env.EMAIL_USER}>`,
-            to: userEmail,
-            subject: '🏆 Welcome to Spardha\'26 - Registration Confirmed',
-            text: textContent,
-            html: htmlContent,
-            attachments: []
-        };
+        const attachments = [];
 
         // Add QR code as attachment if available
         if (userData.qrCodeBase64) {
-            console.log(`📎 Adding QR code attachment for ${userEmail}`);
-            mailOptions.attachments.push({
+            attachments.push({
                 filename: `spardha26-ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
                 content: Buffer.from(userData.qrCodeBase64, 'base64'),
                 contentType: "image/png"
             });
-            console.log(`✅ QR code attachment added for ${userEmail}`);
-        } else {
-            console.log(`⚠️ No QR code available for attachment to ${userEmail}`);
         }
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`✅ Registration email sent successfully to ${userEmail}. Message ID: ${info.messageId}`);
-        return { success: true, result: info };
+        const result = await sendEmailWithFallback({
+            to: userEmail,
+            subject: '🏆 Welcome to Spardha\'26 - Registration Confirmed',
+            text: textContent,
+            html: htmlContent,
+            attachments: attachments
+        });
+
+        return result;
 
     } catch (error) {
-        console.error(`❌ Failed to send registration email to ${userEmail}:`, error.message);
+        console.error(`❌ Global error sending registration email to ${userEmail}:`, error.message);
         return { success: false, error: error.message };
     }
 }
@@ -365,44 +426,36 @@ Team Spardha'26`;
 }
 
 /**
- * Send payment initiation email (using same pattern as working test-email.js)
+ * Send payment initiation email
  */
 async function sendPaymentInitiatedEmail(paymentData) {
     const { email: userEmail, otp } = paymentData;
 
     try {
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            throw new Error("Missing EMAIL_USER or EMAIL_PASS in environment variables");
-        }
-
         const { htmlContent, textContent } = generatePaymentInitiationEmailContent(paymentData);
-
-        const mailOptions = {
-            from: `"Spardha'26 Team" <${process.env.EMAIL_USER}>`,
-            to: userEmail,
-            subject: otp ? '🔐 Your Spardha\'26 Ticket Access OTP' : '🎉 Welcome to Spardha\'26 - Registration Confirmed',
-            text: textContent,
-            html: htmlContent,
-            attachments: []
-        };
+        const attachments = [];
 
         // Add QR code as attachment if available (for non-OTP emails)
         if (!otp && paymentData.qrCodeBase64) {
-            console.log(`📎 Adding QR code attachment for ${userEmail}`);
-            mailOptions.attachments.push({
+            attachments.push({
                 filename: `spardha26-ticket-${paymentData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
                 content: Buffer.from(paymentData.qrCodeBase64, 'base64'),
                 contentType: "image/png"
             });
-            console.log(`✅ QR code attachment added for ${userEmail}`);
         }
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`✅ ${otp ? 'OTP' : 'Payment initiation'} email sent successfully to ${userEmail}. Message ID: ${info.messageId}`);
-        return { success: true, result: info };
+        const result = await sendEmailWithFallback({
+            to: userEmail,
+            subject: otp ? '🔐 Your Spardha\'26 Ticket Access OTP' : '🎉 Welcome to Spardha\'26 - Registration Confirmed',
+            text: textContent,
+            html: htmlContent,
+            attachments: attachments
+        });
+
+        return result;
 
     } catch (error) {
-        console.error(`❌ Failed to send ${otp ? 'OTP' : 'payment initiation'} email to ${userEmail}:`, error.message);
+        console.error(`❌ Global error sending ${otp ? 'OTP' : 'payment initiation'} email to ${userEmail}:`, error.message);
         return { success: false, error: error.message };
     }
 }

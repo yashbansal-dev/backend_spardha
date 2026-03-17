@@ -6,7 +6,6 @@ const verifyToken = async (req, res, next) => {
   try {
     // Accept either 'jwt' (local login) or 'token' (Google login) cookie names
     const token = req.cookies.jwt || req.cookies.token;
-    console.log(token);
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -15,7 +14,6 @@ const verifyToken = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.jwtkey);
-    console.log(decoded);
     // Fetch user data
     const user = await User.findById(decoded._id);
     if (!user) {
@@ -24,8 +22,6 @@ const verifyToken = async (req, res, next) => {
         message: "Invalid token. User not found."
       });
     }
-    console.log(user);
-
     req.user = user;
     next();
   } catch (error) {

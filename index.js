@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const bodyParser = require('body-parser');
 const { login, signup, logout } = require("./controller/controller");
+const { verifyAdmin } = require("./middleware/auth");
 const apirouter = require("./routes/api");
 const cookieparser = require("cookie-parser");
 const adminrouter = require("./routes/admin");
@@ -136,8 +137,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieparser());
 
-// Dynamically generate and serve Excel export
-app.get('/public/registrations_export.xlsx', async (req, res) => {
+// Dynamically generate and serve Excel export - PROTECTED
+app.get('/public/registrations_export.xlsx', verifyAdmin, async (req, res) => {
   try {
     const { generateExcelReport } = require('./utils/excelExport');
     const outputPath = path.join(__dirname, 'public', 'registrations_export.xlsx');
@@ -154,7 +155,7 @@ app.get('/public/registrations_export.xlsx', async (req, res) => {
   }
 });
 
-app.get('/uploads/registrations_export.xlsx', async (req, res) => {
+app.get('/uploads/registrations_export.xlsx', verifyAdmin, async (req, res) => {
   try {
     const { generateExcelReport } = require('./utils/excelExport');
     const outputPath = process.env.NODE_ENV === 'production'
@@ -322,9 +323,9 @@ app.get("/connectivity-test", (req, res) => {
   });
 });
 
-// Helper route to get server IP for Cashfree Whitelisting
+// Helper route to get server IP for Cashfree Whitelisting - PROTECTED
 const axios = require('axios');
-app.get("/server-ip", async (req, res) => {
+app.get("/server-ip", verifyAdmin, async (req, res) => {
   try {
     console.log("Fetching server public IP...");
     const response = await axios.get('https://api.ipify.org?format=json');
@@ -340,13 +341,13 @@ app.get("/server-ip", async (req, res) => {
 });
 
 // Public routes (no authentication required)
-app.post("/login", (req, res, next) => {
+app.post("/login", authLimiter, (req, res, next) => {
   console.log(`📥 Login attempt from: ${req.get('Origin')}`);
   console.log(`📝 Login data:`, { email: req.body.email, hasPassword: !!req.body.password });
   next();
 }, login);
 
-app.post("/signup", (req, res, next) => {
+app.post("/signup", authLimiter, (req, res, next) => {
   console.log(`📥 Signup attempt from: ${req.get('Origin')}`);
   console.log(`📝 Signup data:`, {
     email: req.body.email,
@@ -359,7 +360,7 @@ app.post("/signup", (req, res, next) => {
 app.post("/logout", logout);
 
 // Register route with image upload - NEW TEAM-BASED SYSTEM
-app.post("/register", upload.any(), async (req, res) => {
+app.post("/register", authLimiter, upload.any(), async (req, res) => {
   try {
     // Simplified Registration Logic for Spardha
     console.log("Spardha Registration - Standard Flow");

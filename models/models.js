@@ -12,6 +12,12 @@ const userSchema = new mongoose.Schema({
   qrPath: String,
   qrCodeBase64: String, // Single QR code for all events
 
+  // Authorization tracking
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
+
   // Individual tracking
   isvalidated: {
     type: Boolean,
@@ -102,6 +108,11 @@ const userSchema = new mongoose.Schema({
   },
   emailSentAt: {
     type: Date,
+    default: null
+  },
+  emailSentBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
     default: null
   },
 
@@ -331,13 +342,11 @@ const purchaseSchema = new mongoose.Schema({
 });
 
 // Add indexes for better performance
-userSchema.index({ email: 1 });
 userSchema.index({ events: 1 });
 userSchema.index({ 'teamRegistrations.eventName': 1 });
 teamCompositionSchema.index({ eventName: 1 });
 teamCompositionSchema.index({ 'teamLeader.userId': 1 });
 teamCompositionSchema.index({ 'teamMembers.userId': 1 });
-purchaseSchema.index({ orderId: 1 });
 purchaseSchema.index({ userId: 1 });
 purchaseSchema.index({ mainPersonId: 1 });
 purchaseSchema.index({ paymentSessionId: 1 });

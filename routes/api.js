@@ -61,7 +61,7 @@ router.post('/send-ticket-otp', async (req, res) => {
     });
 
     if (emailResult.success) {
-      console.log(`✅ OTP sent to ${email}: ${otp}`);
+      console.log(`✅ OTP sent to ${email}`);
       res.json({
         success: true,
         message: 'OTP sent successfully to your email'
@@ -139,7 +139,7 @@ router.post('/verify-ticket-otp', async (req, res) => {
     // Generate temporary access token (valid for 30 minutes)
     const tempToken = jwt.sign(
       { email: emailKey, purpose: 'ticket-access' },
-      process.env.jwtkey || 'fallback-secret',
+      process.env.jwtkey,
       { expiresIn: '30m' }
     );
 
@@ -243,7 +243,7 @@ router.get('/profile/:id', verifyAdmin, async (req, res) => {
 // Get user data (requires authentication) - UPDATED FOR UNIFIED USER SYSTEM
 router.get("/user", verifyToken, async (req, res) => {
   try {
-    console.log(req.user);
+
     const user = req.user; // User is already available from verifyToken middleware
     if (!user) {
       return res.status(404).json({
@@ -254,7 +254,7 @@ router.get("/user", verifyToken, async (req, res) => {
 
     const events = user.events;
     const eventData = [];
-    for (i = 0; i < events.length; i++) {
+    for (let i = 0; i < events.length; i++) {
       const info = await Event.findOne({ name: events[i] });
       if (info) {
         eventData.push(info);
@@ -453,7 +453,7 @@ router.post('/team-by-email', async (req, res) => {
     // Verify the temporary access token
     let email;
     try {
-      const decoded = jwt.verify(accessToken, process.env.jwtkey || 'fallback-secret');
+      const decoded = jwt.verify(accessToken, process.env.jwtkey);
       if (decoded.purpose !== 'ticket-access') {
         throw new Error('Invalid token purpose');
       }

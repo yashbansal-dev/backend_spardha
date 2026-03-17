@@ -7,6 +7,10 @@ const { analyzeCommitteeReferrals } = require("../analyze-committee-referrals");
 const { generateExcelReport } = require("../utils/excelExport");
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcrypt');
+const shortid = require('shortid');
+const { generateUserQRCode } = require('../utils/qrCodeService');
+const adminStats = require('../utils/adminStats');
 const router = express.Router();
 
 // Promo code validation endpoint removed
@@ -37,13 +41,13 @@ router.get("/verify/:id", verifyAdmin, async (req, res) => {
     } else if (person.teamRegistrations && person.teamRegistrations.length > 0) {
       // If person has team registrations, get team info
       const latestTeamReg = person.teamRegistrations[person.teamRegistrations.length - 1];
-      if (latestTeamReg.teamId) {
-        const teamComposition = await TeamComposition.findOne({ teamId: latestTeamReg.teamId });
+      if (latestTeamReg.teamCompositionId) {
+        const teamComposition = await TeamComposition.findById(latestTeamReg.teamCompositionId);
         if (teamComposition) {
           teamInfo = {
-            teamId: latestTeamReg.teamId,
+            teamId: latestTeamReg.teamCompositionId,
             teamSize: teamComposition.teamMembers.length,
-            isTeamLeader: teamComposition.teamLeader.toString() === person._id.toString()
+            isTeamLeader: teamComposition.teamLeader.userId.toString() === person._id.toString()
           };
         }
       }
@@ -83,7 +87,7 @@ router.get("/verify/:id", verifyAdmin, async (req, res) => {
       entryTime: person.entryTime,
       allowEntry: true, // Always allow entry regardless of validation or previous entry status
       isTeamMember: isTeamMember,
-      isTeamLeader: !isTeamMember && person.isMainPerson,
+      isTeamLeader: !isTeamMember && (person.isMainPerson || (person.teamRegistrations && person.teamRegistrations.some(r => r.isTeamLeader))),
       events: person.events || [],
       finalPrice: person.finalPrice || 0,
       // Team information
@@ -141,7 +145,7 @@ router.post("/allow-entry/:id", verifyAdmin, async (req, res) => {
     // Check if user is part of a team
     const teamComposition = await TeamComposition.findOne({
       $or: [
-        { teamLeader: user._id },
+        { 'teamLeader.userId': user._id },
         { 'teamMembers.userId': user._id }
       ]
     });
@@ -547,7 +551,7 @@ router.get("/team/:teamId", verifyAdmin, async (req, res) => {
           entryTime: member.userId.entryTime,
           events: member.userId.events
         })),
-        teamSize: mainPerson.teamSize
+        teamSize: teamComposition.totalMembers
       }
     });
 
@@ -582,12 +586,8 @@ router.get("/users-email-status", verifyAdmin, async (req, res) => {
       contactNo: user.contactNo,
       universityName: user.universityName,
       events: user.events,
-      teamId: user.teamId,
-      isMainPerson: user.isMainPerson,
-      teamSize: user.teamSize,
       emailSent: user.emailSent,
       emailSentAt: user.emailSentAt,
-      emailSentBy: user.emailSentBy,
       hasEntered: user.hasEntered,
       entryTime: user.entryTime,
       isvalidated: user.isvalidated,
@@ -669,8 +669,8 @@ router.post("/send-email/:userId", verifyAdmin, async (req, res) => {
     const userId = req.params.userId;
     const { userType = 'user' } = req.body; // 'user' or 'team-member'
 
-    let user;
-    let Model = userType === 'team-member' ? TeamMember : User;
+    // Both 'user' and 'team-member' types are now stored in the unified User model
+    let Model = User;
 
     user = await Model.findById(userId);
 
@@ -1079,7 +1079,8 @@ router.post("/reset-email-status/:userId", verifyAdmin, async (req, res) => {
     const userId = req.params.userId;
     const { userType = 'user' } = req.body;
 
-    let Model = userType === 'team-member' ? TeamMember : User;
+    // Both 'user' and 'team-member' types are now stored in the unified User model
+    let Model = User;
     const user = await Model.findById(userId);
 
     if (!user) {
@@ -1548,13 +1549,13 @@ router.get("/export/users", verifyAdmin, async (req, res) => {
         : {};
 
       const teamCompositions = await TeamComposition.find(teamQuery)
-        .populate('teamLeader', 'name email contactNo universityName hasEntered entryTime emailSent createdAt')
-        .populate('members', 'name email contactNo universityName hasEntered entryTime emailSent createdAt')
+        .populate('teamLeader.userId', 'name email contactNo universityName hasEntered entryTime emailSent createdAt')
+        .populate('teamMembers.userId', 'name email contactNo universityName hasEntered entryTime emailSent createdAt')
         .lean();
 
       const teamMembers = teamCompositions.flatMap(team =>
-        team.members.map(member => ({
-          ...member,
+        team.teamMembers.map(member => ({
+          ...member.userId,
           userType: 'team_member',
           teamInfo: {
             teamId: team._id,
@@ -1618,9 +1619,11 @@ router.get("/export/users", verifyAdmin, async (req, res) => {
     const csvContent = [
       csvHeaders.join(','),
       ...csvRows.map(row =>
-        typeof field === 'string' && field.includes(',')
-          ? `"${field.replace(/"/g, '""')}"`
-          : field
+        row.map(field =>
+          typeof field === 'string' && field.includes(',')
+            ? `"${field.replace(/"/g, '""')}"`
+            : field
+        ).join(',')
       )
     ].join('\n');
 
@@ -1655,8 +1658,8 @@ router.get("/export/teams", verifyAdmin, async (req, res) => {
 
     // Get team compositions
     const teams = await TeamComposition.find(filters)
-      .populate('teamLeader', 'name email contactNo universityName hasEntered entryTime emailSent')
-      .populate('members', 'name email contactNo universityName hasEntered entryTime emailSent')
+      .populate('teamLeader.userId', 'name email contactNo universityName hasEntered entryTime emailSent')
+      .populate('teamMembers.userId', 'name email contactNo universityName hasEntered entryTime emailSent')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -1689,9 +1692,9 @@ router.get("/export/teams", verifyAdmin, async (req, res) => {
     ];
 
     const csvRows = teams.map(team => {
-      const memberNames = team.members.map(m => m.name).join('; ');
-      const memberEmails = team.members.map(m => m.email).join('; ');
-      const enteredMembersCount = team.members.filter(m => m.hasEntered).length;
+      const memberNames = team.teamMembers.map(m => m.userId?.name || m.name || '').join('; ');
+      const memberEmails = team.teamMembers.map(m => m.userId?.email || m.email || '').join('; ');
+      const enteredMembersCount = team.teamMembers.filter(m => m.userId?.hasEntered || m.hasEntered).length;
 
       return [
         team.teamName || '',
@@ -2402,7 +2405,7 @@ router.get("/search-participants", async (req, res) => {
       $or: [
         { name: { $regex: query, $options: 'i' } },
         { email: { $regex: query, $options: 'i' } },
-        { phone: { $regex: query, $options: 'i' } }
+        { contactNo: { $regex: query, $options: 'i' } }
       ]
     };
 
@@ -2756,7 +2759,7 @@ router.get("/manage-users", async (req, res) => {
 // Create new user via manage-users
 router.post("/manage-users", async (req, res) => {
   try {
-    const { name, email, phone, password, college, year, branch } = req.body;
+    const { name, email, contactNo, password, college, year, branch } = req.body; // use contactNo instead of phone
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -2774,7 +2777,7 @@ router.post("/manage-users", async (req, res) => {
     const newUser = new User({
       name,
       email,
-      phone,
+      contactNo,
       password: hashedPassword,
       college,
       year,
@@ -2800,7 +2803,7 @@ router.post("/manage-users", async (req, res) => {
         id: newUser._id,
         name: newUser.name,
         email: newUser.email,
-        phone: newUser.phone,
+        contactNo: newUser.contactNo,
         college: newUser.college,
         year: newUser.year,
         branch: newUser.branch
@@ -3382,10 +3385,6 @@ router.post("/manage-teams/add-team", verifyAdmin, async (req, res) => {
 
     if (!teamLeader) {
       // Create new team leader user
-      const bcrypt = require('bcrypt');
-      const shortid = require('shortid');
-      const { generateUserQRCode } = require('../utils/qrCodeService');
-
       const defaultPassword = 'Sabrang2025!'; // You might want to generate a random password
       const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
@@ -3432,10 +3431,6 @@ router.post("/manage-teams/add-team", verifyAdmin, async (req, res) => {
       let member = await User.findOne({ email: memberData.email });
 
       if (!member) {
-        const bcrypt = require('bcrypt');
-        const shortid = require('shortid');
-        const { generateUserQRCode } = require('../utils/qrCodeService');
-
         const defaultPassword = 'Sabrang2025!';
         const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
@@ -3488,7 +3483,12 @@ router.post("/manage-teams/add-team", verifyAdmin, async (req, res) => {
       teamId: shortid.generate(),
       teamName,
       eventName,
-      teamLeader: teamLeader._id,
+      teamLeader: {
+        userId: teamLeader._id,
+        name: teamLeader.name,
+        email: teamLeader.email,
+        hasEntered: teamLeader.hasEntered || false
+      },
       teamMembers: createdMembers,
       totalMembers: createdMembers.length + 1,
       registrationComplete: true,
@@ -3613,10 +3613,6 @@ router.post("/manage-users/add-user", async (req, res) => {
     }
 
     // Create user
-    const bcrypt = require('bcrypt');
-    const shortid = require('shortid');
-    const { generateUserQRCode } = require('../utils/qrCodeService');
-
     const userPassword = password || 'Sabrang2025!'; // Default password if not provided
     const hashedPassword = await bcrypt.hash(userPassword, 12);
 
@@ -3708,7 +3704,7 @@ router.post("/manage-users/add-team", async (req, res) => {
     }
 
     // Check if event exists
-    const event = await Event.findOne({ eventName });
+    const event = await Event.findOne({ name: eventName });
     if (!event) {
       return res.status(404).json({
         success: false,
@@ -3724,11 +3720,12 @@ router.post("/manage-users/add-team", async (req, res) => {
       if (existingLeader) {
         leaderUser = existingLeader;
       } else {
-        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+        const hashedPassword = await bcrypt.hash(defaultPassword, 12);
         leaderUser = new User({
           name: teamLeader.split('@')[0], // Use email prefix as name
           email: teamLeader,
           password: hashedPassword,
+          contactNo: teamLeader, // fallback
           isVerified: true
         });
         await leaderUser.save();
@@ -3739,11 +3736,11 @@ router.post("/manage-users/add-team", async (req, res) => {
       if (existingLeader) {
         leaderUser = existingLeader;
       } else {
-        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+        const hashedPassword = await bcrypt.hash(defaultPassword, 12);
         leaderUser = new User({
           name: teamLeader.name,
           email: teamLeader.email,
-          phone: teamLeader.phone,
+          contactNo: teamLeader.contactNo || teamLeader.phone,
           college: teamLeader.college,
           year: teamLeader.year,
           branch: teamLeader.branch,
@@ -3759,16 +3756,18 @@ router.post("/manage-users/add-team", async (req, res) => {
     if (teamMembers && teamMembers.length > 0) {
       for (const member of teamMembers) {
         let memberUser;
-        const existingMember = await User.findOne({ email: member.email });
+        const memberEmail = member.email || (typeof member === 'string' ? member : null);
+        if (!memberEmail) continue;
+        const existingMember = await User.findOne({ email: memberEmail });
 
         if (existingMember) {
           memberUser = existingMember;
         } else {
-          const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+          const hashedPassword = await bcrypt.hash(defaultPassword, 12);
           memberUser = new User({
-            name: member.name,
-            email: member.email,
-            phone: member.phone,
+            name: member.name || memberEmail.split('@')[0],
+            email: memberEmail,
+            contactNo: member.contactNo || member.phone,
             college: member.college,
             year: member.year,
             branch: member.branch,
@@ -3782,7 +3781,7 @@ router.post("/manage-users/add-team", async (req, res) => {
           userId: memberUser._id,
           name: memberUser.name,
           email: memberUser.email,
-          phone: memberUser.phone
+          contactNo: memberUser.contactNo
         });
       }
     }
@@ -3791,10 +3790,17 @@ router.post("/manage-users/add-team", async (req, res) => {
     const team = new TeamComposition({
       teamName,
       eventName,
-      teamLeader: leaderUser._id,
+      teamLeader: {
+        userId: leaderUser._id,
+        name: leaderUser.name,
+        email: leaderUser.email,
+        hasEntered: leaderUser.hasEntered,
+        entryTime: leaderUser.entryTime
+      },
       teamMembers: processedMembers,
-      isRegistered: true,
-      registrationDate: new Date()
+      totalMembers: processedMembers.length + 1,
+      registrationComplete: true,
+      createdAt: new Date()
     });
 
     await team.save();
@@ -3845,11 +3851,6 @@ router.post("/manage-users/bulk-add", verifyAdmin, async (req, res) => {
       skipped: 0,
       details: []
     };
-
-    const bcrypt = require('bcrypt');
-    const shortid = require('shortid');
-    const { generateUserQRCode } = require('../utils/qrCodeService');
-    const { sendRegistrationEmail } = require('../utils/emailService');
 
     for (const userData of users) {
       try {
@@ -4167,4 +4168,63 @@ router.get("/generate-excel", verifyAdmin, async (req, res) => {
   }
 });
 
+// Analytics dashboard endpoint (admin only)
+router.get("/analytics", verifyAdmin, async (req, res) => {
+  try {
+    console.log('📊 Fetching advanced admin analytics data...');
+    
+    const [
+      summary, 
+      eventBreakdown, 
+      timeline, 
+      universities,
+      vitals,
+      demographics,
+      activityFeed,
+      paymentHealth
+    ] = await Promise.all([
+        adminStats.getSummaryStats(),
+        adminStats.getEventAnalytics(),
+        adminStats.getRegistrationTimeline(),
+        adminStats.getUniversityStats(),
+        adminStats.getSystemVitals(),
+        adminStats.getDetailedDemographics(),
+        adminStats.getActivityFeed(),
+        adminStats.getPaymentHealth()
+    ]);
+
+    res.json({
+        success: true,
+        data: {
+            summary,
+            eventBreakdown,
+            timeline,
+            universities,
+            vitals,
+            demographics,
+            activityFeed,
+            paymentHealth,
+            lastUpdated: new Date()
+        }
+    });
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({ 
+        success: false, 
+        message: 'Internal server error',
+        error: error.message 
+    });
+  }
+});
+
+// Heartbeat health check
+router.get("/health", async (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date(),
+    uptime: process.uptime()
+  });
+});
+
 module.exports = router;
+

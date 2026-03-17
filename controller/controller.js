@@ -40,7 +40,7 @@ async function login(req, res) {
       _id: user._id,
       email: user.email,
       referral: user.referalID
-    }, process.env.jwtkey || 'secretkey'); // Fallback key to prevent crash
+    }, process.env.jwtkey);
 
     res.cookie("jwt", token, {
       httpOnly: true,
@@ -65,7 +65,8 @@ async function login(req, res) {
 
 async function signup(req, res) {
   try {
-    console.log('Request Body:', req.body);
+    // Remove plain-text password logging for security
+
 
     if (!req.body.email || !req.body.password) {
       return res.status(400).json({
@@ -171,15 +172,11 @@ async function logout(req, res) {
 }
 
 async function register(req, res) {
-  try {
-    const { email, password } = req.body;
-  } catch (error) {
-    console.error('Register error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
+  // This function is a stub - registration is handled by the /register route in index.js
+  return res.status(404).json({
+    success: false,
+    message: 'Use the /register endpoint directly'
+  });
 }
 
 module.exports = { login, signup, logout, register };
