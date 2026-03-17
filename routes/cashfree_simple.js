@@ -290,7 +290,7 @@ async function processPaymentSuccess(orderId, paymentData = null) {
     }
 
     // ====================================================
-    // DYNAMIC EXCEL REGENERATION
+    // DYNAMIC EXCEL REGENERATION (Non-blocking)
     // ====================================================
     try {
         const { generateExcelReport } = require('../utils/excelExport');
@@ -304,15 +304,19 @@ async function processPaymentSuccess(orderId, paymentData = null) {
             fs.mkdirSync(dir, { recursive: true });
         }
 
-        console.log(`📊 Regenerating latest Excel report to ${outputPath}...`);
-        const excelResult = await generateExcelReport(outputPath);
-        if (excelResult.success) {
-            console.log('✅ Dynamic Excel report successfully regenerated.');
-        } else {
-            console.error('❌ Failed to regenerate Excel report dynamically:', excelResult.error);
-        }
+        console.log(`📊 Triggering background Excel report regeneration to ${outputPath}...`);
+        // We do NOT await this to keep the response fast for the user
+        generateExcelReport(outputPath).then(excelResult => {
+            if (excelResult.success) {
+                console.log('✅ Dynamic Excel report successfully regenerated in background.');
+            } else {
+                console.error('❌ Failed to regenerate Excel report dynamically in background:', excelResult.error);
+            }
+        }).catch(err => {
+            console.error('❌ Critical error in background Excel regeneration:', err);
+        });
     } catch (excelErr) {
-        console.error('❌ Error during dynamic Excel regeneration:', excelErr);
+        console.error('❌ Error during dynamic Excel regeneration setup:', excelErr);
     }
 
     return { success: true, purchase, user };
@@ -780,7 +784,7 @@ router.post('/create-order', async (req, res) => {
 // generateQRCode is removed to avoid inconsistency with the admin scanner.
 
 // Step 1: Create Payment Order (Following official documentation with fallback)
-router.get('/verify/:orderId', verifyAdmin, async (req, res) => {
+router.get('/verify/:orderId', async (req, res) => {
     try {
         const { orderId } = req.params;
         console.log('Verifying order:', orderId);
@@ -860,7 +864,7 @@ router.get('/verify/:orderId', verifyAdmin, async (req, res) => {
 });
 
 // Alternative verification endpoint
-router.post('/verify', verifyAdmin, async (req, res) => {
+router.post('/verify', async (req, res) => {
     try {
         const { orderId } = req.body;
 
@@ -901,7 +905,7 @@ router.post('/verify', verifyAdmin, async (req, res) => {
 });
 
 // Get order status (Step 3: Confirming Payment with fallback)
-router.get('/status/:orderId', verifyAdmin, async (req, res) => {
+router.get('/status/:orderId', async (req, res) => {
     try {
         const { orderId } = req.params;
         console.log('Checking payment status for order:', orderId);
@@ -966,9 +970,9 @@ router.get('/success/:orderId', async (req, res) => {
 
         // ─── RETRY LOOP ──────────────────────────────────────────────
         // Cashfree can return 'pending' for a few seconds right after payment.
-        // We poll up to 5 times with 2-second gaps before giving up.
+        // We poll up to 10 times with 2-second gaps before giving up.
         // ─────────────────────────────────────────────────────────────
-        const MAX_RETRIES = 5;
+        const MAX_RETRIES = 10;
         const RETRY_DELAY_MS = 2000;
         let paymentStatus = 'pending';
 
