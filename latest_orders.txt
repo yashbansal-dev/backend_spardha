@@ -1,15 +1,23 @@
-[dotenv@17.3.1] injecting env (14) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[dotenv@17.3.1] injecting env (14) from .env -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
 --- LATEST 5 PURCHASES ---
-Order: order_9dfc7e02fe49 | Status: pending | Email: kartikgupta1279@gmail.com | userRegistered: false | Date: Wed Mar 18 2026 00:55:48 GMT+0530 (India Standard Time)
+Order: order_c12837d4e9df | Status: completed | Email: kartikgupta1279@gmail.com | userRegistered: true | Date: Wed Mar 18 2026 01:32:24 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Girls), Chess (Girls)
+Order: order_testparse | Status: completed | Email: parse@example.com | userRegistered: true | Date: Wed Mar 18 2026 01:27:56 GMT+0530 (India Standard Time)
+  -> User exists: false | Events: N/A
+Order: order_85ed7d97fdea | Status: pending | Email: kartikgupta1279@gmail.com | userRegistered: false | Date: Wed Mar 18 2026 01:24:16 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Girls), Chess (Girls)
+Order: order_76bf9c14c6b4 | Status: completed | Email: kartikgupta1279@gmail.com | userRegistered: true | Date: Wed Mar 18 2026 01:09:53 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Girls), Chess (Girls)
+Order: order_9dfc7e02fe49 | Status: completed | Email: kartikgupta1279@gmail.com | userRegistered: true | Date: Wed Mar 18 2026 00:55:48 GMT+0530 (India Standard Time)
   -> User exists: true | Events: Badminton (Singles) (Girls), Chess (Girls)
 Order: order_testracetest | Status: completed | Email: race@example.com | userRegistered: true | Date: Wed Mar 18 2026 00:52:41 GMT+0530 (India Standard Time)
-  -> User exists: true | Events: General Registration
+  -> User exists: false | Events: N/A
 Order: order_9bb30a3feae4 | Status: pending | Email: kartikgupta1279@gmail.com | userRegistered: false | Date: Wed Mar 18 2026 00:37:42 GMT+0530 (India Standard Time)
   -> User exists: true | Events: Badminton (Singles) (Girls), Chess (Girls)
 Order: order_3bfa3de83eff | Status: pending | Email: yashbansal@jklu.edu.in | userRegistered: false | Date: Wed Mar 18 2026 00:05:50 GMT+0530 (India Standard Time)
-  -> User exists: true | Events: Badminton (Singles) (Girls)
+  -> User exists: false | Events: N/A
 Order: order_c9b9785ff54e | Status: completed | Email: yashbansal@jklu.edu.in | userRegistered: true | Date: Tue Mar 17 2026 23:57:14 GMT+0530 (India Standard Time)
-  -> User exists: true | Events: Badminton (Singles) (Girls)
+  -> User exists: false | Events: N/A
 Order: order_38f710075d06 | Status: pending | Email: priyanshu333k@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 23:51:48 GMT+0530 (India Standard Time)
   -> User exists: false | Events: N/A
 Order: order_e9fce71a609a | Status: pending | Email: RAUTELAJAYESH@GMAIL.COM | userRegistered: false | Date: Tue Mar 17 2026 23:09:42 GMT+0530 (India Standard Time)
@@ -32,11 +40,3 @@ Order: order_a6d708f02232 | Status: pending | Email: gauravbnwl2002@gmail.com | 
   -> User exists: true | Events: esports-Boys
 Order: order_56f6d4f11023 | Status: pending | Email: ayushapr2005@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 13:13:12 GMT+0530 (India Standard Time)
   -> User exists: false | Events: N/A
-Order: order_f6f55601c126 | Status: pending | Email: gauravbnwl2002@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 13:04:12 GMT+0530 (India Standard Time)
-  -> User exists: true | Events: esports-Boys
-Order: order_7f3aba4a2702 | Status: pending | Email: gauravbnwl2002@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 11:34:10 GMT+0530 (India Standard Time)
-  -> User exists: true | Events: esports-Boys
-Order: order_63d281674b4a | Status: pending | Email: biancaferns10@gmail.com | userRegistered: false | Date: Mon Mar 16 2026 22:22:39 GMT+0530 (India Standard Time)
-  -> User exists: true | Events: Football (5v5) (Girls)
-Order: order_73eaaa2dea88 | Status: pending | Email: kartikgupta1279@gmail.com | userRegistered: false | Date: Mon Mar 16 2026 20:57:59 GMT+0530 (India Standard Time)
-  -> User exists: true | Events: Badminton (Singles) (Girls), Chess (Girls)

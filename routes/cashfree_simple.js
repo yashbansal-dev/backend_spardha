@@ -269,30 +269,26 @@ async function processPaymentSuccess(orderId, paymentData = null) {
         const { sendRegistrationEmail } = require('../utils/emailService');
 
         // 1. Send to Main User
-        if (!user.emailSent) {
-            const emailData = {
-                name: user.name,
-                email: user.email,
-                events: user.events || ['General Registration'],
-                qrCodeBase64: user.qrCodeBase64,
-                orderId: purchase.orderId
-            };
+        const emailData = {
+            name: user.name,
+            email: user.email,
+            events: user.events || ['General Registration'],
+            qrCodeBase64: user.qrCodeBase64,
+            orderId: purchase.orderId
+        };
 
-            const emailResult = await sendRegistrationEmail(user.email, emailData);
-            if (emailResult.success) {
-                console.log('✅ Registration email sent to main user:', user.email);
-                user.emailSent = true;
-                user.emailSentAt = new Date();
-                await user.save();
-                // ✅ Also mark the purchase as email sent (main part)
-                purchase.emailSent = true;
-                purchase.emailSentAt = new Date();
-                await purchase.save();
-            } else {
-                console.error('❌ Failed to send email to main user:', user.email, emailResult.error);
-            }
+        const emailResult = await sendRegistrationEmail(user.email, emailData);
+        if (emailResult.success) {
+            console.log('✅ Registration email sent to main user:', user.email);
+            user.emailSent = true;
+            user.emailSentAt = new Date();
+            await user.save();
+            // ✅ Also mark the purchase as email sent (main part)
+            purchase.emailSent = true;
+            purchase.emailSentAt = new Date();
+            await purchase.save();
         } else {
-            console.log('ℹ️ Email already sent to main user:', user.email);
+            console.error('❌ Failed to send email to main user:', user.email, emailResult.error);
         }
 
         // 2. Send to Team Members
