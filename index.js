@@ -89,6 +89,7 @@ if (process.env.ALLOWED_ORIGINS) {
 // Always allow Vercel deployments (both development and production patterns)
 allowedOrigins.push(/^https:\/\/.*\.vercel\.app$/);
 allowedOrigins.push(/^https:\/\/sabrang.*\.vercel\.app$/);
+allowedOrigins.push(/^https:\/\/.*\.up\.railway\.app$/);
 
 // Add development patterns
 if (process.env.NODE_ENV !== 'production') {
@@ -543,6 +544,16 @@ app.use((err, req, res, next) => {
 });
 
 // Environment debug logging removed for brevity
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔥 Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('🔥 Uncaught Exception:', err);
+  // Optional: Graceful shutdown or process exit if critical
+  // process.exit(1);
+});
 
 // Start server with additional error handling
 const server = app.listen(PORT, '0.0.0.0', () => {
