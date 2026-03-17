@@ -16,22 +16,11 @@ const router = express.Router();
 // Called from both GET /success/:orderId and the Webhook handler
 // -----------------------------------------------------------------------
 async function processPaymentSuccess(orderId, paymentData = null) {
-    // Sanitize paymentMethod to be a string, since Cashfree sometimes returns an object
-    if (paymentData && paymentData.paymentMethod && typeof paymentData.paymentMethod === 'object') {
-        paymentData.paymentMethod = JSON.stringify(paymentData.paymentMethod);
-    } else if (paymentData && paymentData.paymentMethod) {
-        paymentData.paymentMethod = String(paymentData.paymentMethod);
-    }
-
     console.log('🎉 processPaymentSuccess called for order:', orderId);
 
     // 1. Atomically attempt to lock and mark the purchase as completed
-    // ─── ATOMIC LOCK ──────────────────────────────────────────────────
-    // Instead of findOne, we atomically attempt to lock the document
-    // by finding it AND updating it ONLY IF it's not already completed.
-    // ──────────────────────────────────────────────────────────────────
     const purchase = await Purchase.findOneAndUpdate(
-        {
+        { 
             orderId: orderId,
             paymentStatus: { $ne: 'completed' } // Only lock if NOT already completed
         },
@@ -1116,9 +1105,7 @@ router.post('/webhook', async (req, res) => {
                 const purchase = await Purchase.findOne({ orderId: orderId });
                 if (purchase && purchase.paymentStatus !== 'completed') {
                     purchase.transactionId = data.payment.cf_payment_id;
-                    purchase.paymentMethod = typeof data.payment.payment_method === 'object' 
-                        ? JSON.stringify(data.payment.payment_method) 
-                        : String(data.payment.payment_method);
+                    purchase.paymentMethod = data.payment.payment_method;
                     await purchase.save();
                 }
 

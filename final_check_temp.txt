@@ -1,0 +1,42 @@
+[dotenv@17.3.1] injecting env (14) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+--- LATEST 5 PURCHASES ---
+Order: order_76bf9c14c6b4 | Status: completed | Email: kartikgupta1279@gmail.com | userRegistered: true | Date: Wed Mar 18 2026 01:09:53 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Girls), Chess (Girls)
+Order: order_9dfc7e02fe49 | Status: completed | Email: kartikgupta1279@gmail.com | userRegistered: true | Date: Wed Mar 18 2026 00:55:48 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Girls), Chess (Girls)
+Order: order_testracetest | Status: completed | Email: race@example.com | userRegistered: true | Date: Wed Mar 18 2026 00:52:41 GMT+0530 (India Standard Time)
+  -> User exists: false | Events: N/A
+Order: order_9bb30a3feae4 | Status: pending | Email: kartikgupta1279@gmail.com | userRegistered: false | Date: Wed Mar 18 2026 00:37:42 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Girls), Chess (Girls)
+Order: order_3bfa3de83eff | Status: pending | Email: yashbansal@jklu.edu.in | userRegistered: false | Date: Wed Mar 18 2026 00:05:50 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Girls)
+Order: order_c9b9785ff54e | Status: completed | Email: yashbansal@jklu.edu.in | userRegistered: true | Date: Tue Mar 17 2026 23:57:14 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Girls)
+Order: order_38f710075d06 | Status: pending | Email: priyanshu333k@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 23:51:48 GMT+0530 (India Standard Time)
+  -> User exists: false | Events: N/A
+Order: order_e9fce71a609a | Status: pending | Email: RAUTELAJAYESH@GMAIL.COM | userRegistered: false | Date: Tue Mar 17 2026 23:09:42 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Boys)
+Order: order_fa188e12d01c | Status: pending | Email: kpsaathvik04@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 22:18:09 GMT+0530 (India Standard Time)
+  -> User exists: false | Events: N/A
+Order: order_b4ff94fa20fd | Status: pending | Email: manantsrivastava@jklu.edu.in | userRegistered: false | Date: Tue Mar 17 2026 20:40:45 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Boys)
+Order: order_8b5dac2fbcc9 | Status: pending | Email: manantsrivastava@jklu.edu.in | userRegistered: false | Date: Tue Mar 17 2026 20:37:00 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Singles) (Boys)
+Order: order_ec23b1b54a0b | Status: pending | Email: ankitakhangarot25@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 19:06:30 GMT+0530 (India Standard Time)
+  -> User exists: false | Events: N/A
+Order: order_7cd022f0b97e | Status: pending | Email: reniahamaheshwari1108@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 18:06:26 GMT+0530 (India Standard Time)
+  -> User exists: false | Events: N/A
+Order: order_77b8b42a0445 | Status: pending | Email: omruthik2@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 18:05:47 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Badminton (Doubles) (Boys)
+Order: order_f1b8923340bc | Status: pending | Email: tatersamiksha8@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 16:41:57 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Chess (Girls)
+Order: order_a6d708f02232 | Status: pending | Email: gauravbnwl2002@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 13:16:36 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: esports-Boys
+Order: order_56f6d4f11023 | Status: pending | Email: ayushapr2005@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 13:13:12 GMT+0530 (India Standard Time)
+  -> User exists: false | Events: N/A
+Order: order_f6f55601c126 | Status: pending | Email: gauravbnwl2002@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 13:04:12 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: esports-Boys
+Order: order_7f3aba4a2702 | Status: pending | Email: gauravbnwl2002@gmail.com | userRegistered: false | Date: Tue Mar 17 2026 11:34:10 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: esports-Boys
+Order: order_63d281674b4a | Status: pending | Email: biancaferns10@gmail.com | userRegistered: false | Date: Mon Mar 16 2026 22:22:39 GMT+0530 (India Standard Time)
+  -> User exists: true | Events: Football (5v5) (Girls)
