@@ -2,7 +2,7 @@ const ExcelJS = require('exceljs');
 const { User, Purchase, TeamComposition } = require('../models/models');
 const path = require('path');
 const fs = require('fs');
-const { analyzeCommitteeReferrals } = require('../analyze-committee-referrals');
+const { analyzeCommitteeReferrals } = require('./adminStats');
 
 async function generateExcelReport(outputPath) {
     try {
@@ -67,6 +67,8 @@ async function generateExcelReport(outputPath) {
             { header: 'Payment Status', key: 'paymentStatus', width: 16 },
             { header: 'Total Amount (₹)', key: 'totalAmount', width: 16 },
             { header: 'Transaction ID', key: 'transactionId', width: 25 },
+            { header: 'Order ID', key: 'orderId', width: 25 },
+            { header: 'Payment Method', key: 'paymentMethod', width: 20 },
             { header: 'Team Participations', key: 'teams', width: 50 },
         ];
 
@@ -118,6 +120,8 @@ async function generateExcelReport(outputPath) {
                 paymentStatus: purchaseInfo.paymentStatus || 'unknown',
                 totalAmount: purchaseInfo.totalAmount ?? '',
                 transactionId: purchaseInfo.transactionId || purchaseInfo.paymentSessionId || '',
+                orderId: purchaseInfo.orderId || '',
+                paymentMethod: purchaseInfo.paymentMethod || '',
                 teams: teamNames,
                 isvalidated: user.isvalidated ? 'Yes' : 'No',
                 emailSent: user.emailSent ? 'Yes' : 'No',
@@ -149,7 +153,12 @@ async function generateExcelReport(outputPath) {
             { header: 'Referral Code', key: 'referralCode', width: 15 },
             { header: 'My Referal Code', key: 'referalID', width: 20 },
             { header: 'Referal Count', key: 'referalcount', width: 12 },
-            { header: 'University ID Card', key: 'universityIdCard', width: 20 },
+            { header: 'Payment Status', key: 'paymentStatus', width: 16 },
+            { header: 'Total Amount (₹)', key: 'totalAmount', width: 16 },
+            { header: 'Transaction ID', key: 'transactionId', width: 25 },
+            { header: 'Order ID', key: 'orderId', width: 25 },
+            { header: 'Payment Method', key: 'paymentMethod', width: 18 },
+            { header: 'Team Members', key: 'teamMembers', width: 50 },
             { header: 'Email Sent', key: 'emailSent', width: 12 },
             { header: 'Has Entered', key: 'hasEntered', width: 12 },
             { header: 'Registered At', key: 'createdAt', width: 20 },
@@ -190,6 +199,13 @@ async function generateExcelReport(outputPath) {
                     referalID: user.referalID || '',
                     referalcount: user.referalcount || 0,
                     universityIdCard: user.universityIdCard || '',
+                    paymentStatus: purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentStatus || 'unknown',
+                    totalAmount: purchaseMap[user.email?.toLowerCase()?.trim()]?.totalAmount || '',
+                    transactionId: purchaseMap[user.email?.toLowerCase()?.trim()]?.transactionId || purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentSessionId || '',
+                    orderId: purchaseMap[user.email?.toLowerCase()?.trim()]?.orderId || '',
+                    paymentMethod: purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentMethod || '',
+                    teamMembers: (purchaseMap[user.email?.toLowerCase()?.trim()]?.userDetails?.teamMembers || [])
+                        .map(m => `${m.name} (${m.email})`).join(', '),
                     emailSent: user.emailSent ? 'Yes' : 'No',
                     hasEntered: user.hasEntered ? 'Yes' : 'No',
                     createdAt: user.createdAt ? new Date(user.createdAt).toLocaleString('en-IN') : '',
@@ -215,6 +231,15 @@ async function generateExcelReport(outputPath) {
                         referalID: user.referalID || '',
                         referalcount: user.referalcount || 0,
                         universityIdCard: user.universityIdCard || '',
+                        paymentStatus: purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentStatus || 'unknown',
+                        totalAmount: purchaseMap[user.email?.toLowerCase()?.trim()]?.totalAmount || '',
+                        transactionId: purchaseMap[user.email?.toLowerCase()?.trim()]?.transactionId || purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentSessionId || '',
+                        orderId: purchaseMap[user.email?.toLowerCase()?.trim()]?.orderId || '',
+                        paymentMethod: purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentMethod || '',
+                        teamMembers: (purchaseMap[user.email?.toLowerCase()?.trim()]?.userDetails?.teamMembers || [])
+                            .map(m => `${m.name || ''} (${m.email || ''})`)
+                            .filter(s => s !== ' ()')
+                            .join(', '),
                         emailSent: user.emailSent ? 'Yes' : 'No',
                         hasEntered: user.hasEntered ? 'Yes' : 'No',
                         createdAt: user.createdAt ? new Date(user.createdAt).toLocaleString('en-IN') : '',
@@ -284,6 +309,7 @@ async function generateExcelReport(outputPath) {
             { header: 'Amount (₹)', key: 'amount', width: 12 },
             { header: 'Payment Status', key: 'paymentStatus', width: 16 },
             { header: 'Transaction ID', key: 'transactionId', width: 25 },
+            { header: 'Payment Method', key: 'paymentMethod', width: 18 },
             { header: 'Payment Date', key: 'paymentDate', width: 22 },
         ];
 
@@ -338,6 +364,7 @@ async function generateExcelReport(outputPath) {
                 amount: p.totalAmount || 0,
                 paymentStatus: p.paymentStatus || '',
                 transactionId: p.transactionId || '',
+                paymentMethod: p.paymentMethod || '',
                 paymentDate: p.purchaseDate ? new Date(p.purchaseDate).toLocaleString('en-IN') : '',
             });
         }
