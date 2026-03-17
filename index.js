@@ -10,12 +10,13 @@ const cookieparser = require("cookie-parser");
 const adminrouter = require("./routes/admin");
 const path = require('path');
 const jwt = require("jsonwebtoken");
-const shortid = require("shortid"); // Add this line
+const shortid = require("shortid");
 const multer = require("multer");
 const fs = require("fs");
 const bcrypt = require("bcrypt");
 const { User, TeamComposition, Purchase, Event } = require("./models/models");
 const { generateUserQRCode } = require("./utils/qrCodeService");
+const { router: paymentRouter } = require("./routes/cashfree_simple");
 
 const app = express();
 
@@ -42,25 +43,9 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(generalLimiter);
 
 
-// Add request timeout middleware to prevent hanging requests
-app.use((req, res, next) => {
-  // Set timeout for all requests (30 seconds)
-  req.setTimeout(30000, () => {
-    console.log(`⏰ Request timeout: ${req.method} ${req.path}`);
-    if (!res.headersSent) {
-      res.status(408).json({
-        success: false,
-        message: 'Request timeout. Please try again.',
-        error: 'REQUEST_TIMEOUT'
-      });
-    }
-  });
-
-  res.setTimeout(30000, () => {
-    console.log(`⏰ Response timeout: ${req.method} ${req.path}`);
-  });
-
-  next();
+// Health Check Route (for Railway)
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'UP', timestamp: new Date() });
 });
 
 // Request logging removed for brevity
@@ -468,7 +453,6 @@ app.use("/api", apirouter); // This might be the auth router, or a general API r
 app.use("/admin", adminrouter);
 
 // Payment routes
-const { router: paymentRouter } = require("./routes/cashfree_simple");
 app.use("/api/payments", paymentRouter);
 
 
