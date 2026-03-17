@@ -8,6 +8,7 @@ const { verifyAdmin } = require('../middleware/auth');
 const qr = require('qr-image');
 const fs = require('fs');
 const path = require('path');
+const shortid = require('shortid');
 const router = express.Router();
 
 // -----------------------------------------------------------------------
@@ -80,10 +81,13 @@ async function processPaymentSuccess(orderId, paymentData = null) {
             address: purchase.userDetails.address || '',
             universityIdCard: purchase.userDetails.formData?.universityIdCard || '',
             referralCode: purchase.userDetails.formData?.referralCode || '',
+            referalID: shortid.generate(), // 🔥 Generate their OWN referral code
             events: eventNames.length > 0 ? eventNames : ['General Registration'],
             isvalidated: true
         });
     } else {
+        user.isvalidated = true; // ✅ Mark as validated on successful payment
+        if (!user.referalID) user.referalID = shortid.generate(); // ✅ Ensure they have a referral ID
         if (purchase.userDetails.contactNo) user.contactNo = purchase.userDetails.contactNo;
         if (purchase.userDetails.gender) user.gender = purchase.userDetails.gender;
         if (purchase.userDetails.age) user.age = purchase.userDetails.age;
