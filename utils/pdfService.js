@@ -77,49 +77,83 @@ async function generateInvoicePDF(data) {
 async function generateTicketPosterPDF(data) {
     return new Promise((resolve, reject) => {
         try {
-            // A4 page with dark theme
+            // A4 page (595.28 x 841.89)
             const doc = new PDFDocument({ size: 'A4', margin: 0 });
             let buffers = [];
             doc.on('data', buffers.push.bind(buffers));
             doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-            // Background Color (Dark Blue/Black)
-            doc.rect(0, 0, 595.28, 841.89).fill('#020617');
+            const pageWidth = 595.28;
+            const pageHeight = 841.89;
 
-            // --- Header Decoration ---
-            doc.rect(0, 0, 595.28, 150).fill('#E37233');
-            doc.fillColor('#FFFFFF').fontSize(40).text('SPARDHA \'26', 0, 55, { align: 'center' });
-            doc.fontSize(15).text('OFFICIAL ENTRY TICKET', 0, 100, { align: 'center' });
+            // --- 1. Background Gradient ---
+            const grad = doc.linearGradient(0, 0, pageWidth, pageHeight);
+            grad.stop(0, '#020617')  // Deep Navy
+                .stop(1, '#0f172a'); // Slightly lighter Navy
+            doc.rect(0, 0, pageWidth, pageHeight).fill(grad);
 
-            // --- Content ---
-            doc.fillColor('#FFFFFF');
-            doc.fontSize(25).text('Hello,', 50, 200);
-            doc.fontSize(35).fillColor('#F2995C').text(data.name.toUpperCase(), 50, 230);
+            // --- 2. Ticket Main Body (Card) ---
+            const cardMargin = 40;
+            const cardWidth = pageWidth - (cardMargin * 2);
+            const cardHeight = pageHeight - (cardMargin * 2);
+            const cardX = cardMargin;
+            const cardY = cardMargin;
 
-            doc.fillColor('#FFFFFF').fontSize(18).text('You are registered for:', 50, 300);
+            // Draw Card Background
+            doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 15).fill('#1e293b');
+
+            // --- 3. Ticket Header (Orange Section) ---
+            doc.save();
+            doc.roundedRect(cardX, cardY, cardWidth, 180, { topLeft: 15, topRight: 15 }).clip();
+            doc.rect(cardX, cardY, cardWidth, 180).fill('#E37233');
             
-            let eventsText = Array.isArray(data.events) ? data.events.join(', ') : data.events;
-            doc.fontSize(20).fillColor('#fbbf24').text(eventsText, 50, 330, { width: 500 });
+            // Branding
+            doc.fillColor('#FFFFFF').fontSize(45).text('SPARDHA \'26', cardX, cardY + 50, { align: 'center', width: cardWidth });
+            doc.fontSize(14).text('OFFICIAL ENTRY PASS', cardX, cardY + 110, { align: 'center', width: cardWidth, characterSpacing: 2 });
+            doc.restore();
 
-            // --- QR Code Section ---
-            const qrSize = 200;
-            const qrX = (595.28 - qrSize) / 2;
-            const qrY = 450;
+            // --- 4. Ticket-Stub Logic (The Cutout Aesthetic) ---
+            const stubY = cardY + 500;
             
-            // White background for QR code
-            doc.rect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20).fill('#FFFFFF');
+            // Side Cutouts (Circles)
+            doc.fillColor('#020617').circle(cardX, stubY, 20).fill();
+            doc.fillColor('#020617').circle(cardX + cardWidth, stubY, 20).fill();
+            
+            // Dash Line Divider
+            doc.strokeColor('#334155').lineWidth(2).dash(10, { space: 10 }).moveTo(cardX + 25, stubY).lineTo(cardX + cardWidth - 25, stubY).stroke().undash();
+
+            // --- 5. User Information Section ---
+            doc.fillColor('#F2995C').fontSize(30).text(data.name.toUpperCase(), cardX + 30, cardY + 220, { width: cardWidth - 60 });
+            
+            doc.fillColor('#94a3b8').fontSize(12).text('PARTICIPANT NAME', cardX + 30, cardY + 205);
+
+            // Events Section
+            doc.fillColor('#94a3b8').fontSize(12).text('REGISTERED EVENTS', cardX + 30, cardY + 310);
+            
+            let eventsText = Array.isArray(data.events) ? data.events.join(' • ') : data.events;
+            doc.fillColor('#FFFFFF').fontSize(22).text(eventsText, cardX + 30, cardY + 330, { width: cardWidth - 60 });
+
+            // ID Details
+            doc.fillColor('#94a3b8').fontSize(10).text('ORDER ID', cardX + 30, cardY + 440);
+            doc.fillColor('#FFFFFF').fontSize(14).text(data.orderId, cardX + 30, cardY + 455);
+
+            // --- 6. QR Code Section (Bottom Stub) ---
+            const qrSize = 180;
+            const qrX = cardX + (cardWidth - qrSize) / 2;
+            const qrY = stubY + 60;
+            
+            // QR Badge Background
+            doc.roundedRect(qrX - 15, qrY - 15, qrSize + 30, qrSize + 30, 10).fill('#FFFFFF');
             
             if (data.qrCodeBase64) {
                 const qrBuffer = Buffer.from(data.qrCodeBase64, 'base64');
                 doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
             }
 
-            doc.fillColor('#FFFFFF').fontSize(12).text('SCAN FOR ENTRY', 0, qrY + qrSize + 20, { align: 'center' });
-            doc.fontSize(10).fillColor('#94a3b8').text(`Order ID: ${data.orderId}`, 0, qrY + qrSize + 40, { align: 'center' });
-
-            // --- Footer ---
-            doc.rect(0, 790, 595.28, 52).fill('#E37233');
-            doc.fillColor('#FFFFFF').fontSize(12).text('JK LAKSHMIPAT UNIVERSITY, JAIPUR', 0, 810, { align: 'center' });
+            doc.fillColor('#64748b').fontSize(10).text('SCAN AT THE GATE FOR ENTRY', cardX, qrY + qrSize + 30, { align: 'center', width: cardWidth });
+            
+            // --- 7. Branding at Bottom ---
+            doc.fillColor('#E37233').fontSize(12).text('JK LAKSHMIPAT UNIVERSITY, JAIPUR', cardX, cardY + cardHeight - 40, { align: 'center', width: cardWidth });
 
             doc.end();
         } catch (err) {
