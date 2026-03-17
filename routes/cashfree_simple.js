@@ -18,41 +18,65 @@ const router = express.Router();
 async function processPaymentSuccess(orderId, paymentData = null) {
     console.log('🎉 processPaymentSuccess called for order:', orderId);
 
-    const purchase = await Purchase.findOne({ orderId });
+    // 1. Atomically attempt to lock and mark the purchase as completed
+    const purchase = await Purchase.findOneAndUpdate(
+        { 
+            orderId: orderId,
+            paymentStatus: { $ne: 'completed' } // Only lock if NOT already completed
+        },
+        {
+            $set: {
+                paymentStatus: 'completed',
+                paymentCompletedAt: new Date(),
+                // Include payment data if provided
+                ...(paymentData && paymentData.transactionId ? { transactionId: paymentData.transactionId } : {}),
+                ...(paymentData && paymentData.paymentMethod ? { paymentMethod: paymentData.paymentMethod } : {})
+            }
+        },
+        { new: true } // Return the updated document
+    );
+
+    // 2. If purchase is null, it means it was either not found OR already processed
     if (!purchase) {
-        console.error('❌ Purchase not found for orderId:', orderId);
-        return { success: false, message: 'Purchase not found' };
-    }
-
-    // Update transaction details if provided (even if already completed, to backfill missing data)
-    let updatedFields = false;
-    if (paymentData) {
-        if (paymentData.transactionId && purchase.transactionId !== paymentData.transactionId) {
-            purchase.transactionId = paymentData.transactionId;
-            updatedFields = true;
+        const existingPurchase = await Purchase.findOne({ orderId });
+        if (!existingPurchase) {
+            console.error('❌ Purchase not found for orderId:', orderId);
+            return { success: false, message: 'Purchase not found' };
         }
-        if (paymentData.paymentMethod && purchase.paymentMethod !== paymentData.paymentMethod) {
-            purchase.paymentMethod = paymentData.paymentMethod;
-            updatedFields = true;
-        }
-    }
 
-    // Skip full processing ONLY if already fully processed (payment done + email sent)
-    if (purchase.paymentStatus === 'completed' && purchase.emailSent === true) {
+        // It's already processed. Update transaction details if provided
+        let updatedFields = false;
+        if (paymentData) {
+            if (paymentData.transactionId && existingPurchase.transactionId !== paymentData.transactionId) {
+                existingPurchase.transactionId = paymentData.transactionId;
+                updatedFields = true;
+            }
+            if (paymentData.paymentMethod && existingPurchase.paymentMethod !== paymentData.paymentMethod) {
+                existingPurchase.paymentMethod = paymentData.paymentMethod;
+                updatedFields = true;
+            }
+        }
+
+        // Skip full processing
         if (updatedFields) {
-            await purchase.save();
+            await existingPurchase.save();
             console.log('✅ Updated transaction details for already completed order:', orderId);
         }
-        console.log('✅ Payment already fully processed (email sent) for order:', orderId);
-        return { success: true, alreadyProcessed: true, purchase };
+        
+        console.log('✅ Payment already fully processed (or locked) for order:', orderId);
+        
+        let user = null;
+        if (existingPurchase.userId) {
+            user = await User.findById(existingPurchase.userId);
+        } else if (existingPurchase.userDetails?.email) {
+            user = await User.findOne({ email: existingPurchase.userDetails.email });
+        }
+        
+        return { success: true, alreadyProcessed: true, purchase: existingPurchase, user };
     }
 
-    // Mark as completed
-    if (purchase.paymentStatus !== 'completed') {
-        purchase.paymentStatus = 'completed';
-        purchase.paymentCompletedAt = new Date();
-        updatedFields = true;
-    }
+    // AT THIS POINT: THIS EXECUTION THREAD HAS EXCLUSIVE PROCESSING RIGHTS
+    let updatedFields = true; // We just updated the status to completed
 
     // Extract event names from purchase items
     const eventNames = purchase.items.map(item => item.itemName).filter(name => name && name !== 'Demo Payment');
@@ -240,15 +264,7 @@ async function processPaymentSuccess(orderId, paymentData = null) {
                 email: user.email,
                 events: user.events || ['General Registration'],
                 qrCodeBase64: user.qrCodeBase64,
-                orderId: purchase.orderId,
-                // Additional data for Invoice/Ticket PDF
-                universityName: user.universityName || purchase.userDetails?.universityName || '',
-                totalAmount: purchase.amount || 0,
-                items: (purchase.events || []).map(event => ({
-                    itemName: event,
-                    price: (purchase.amount || 0) / (purchase.events?.length || 1), // Estimated per-item price
-                    quantity: 1
-                }))
+                orderId: purchase.orderId
             };
 
             const emailResult = await sendRegistrationEmail(user.email, emailData);
@@ -280,15 +296,7 @@ async function processPaymentSuccess(orderId, paymentData = null) {
                         email: member.email,
                         events: member.events || [team.eventName],
                         qrCodeBase64: member.qrCodeBase64,
-                        orderId: purchase.orderId,
-                        // Additional data for Invoice/Ticket PDF
-                        universityName: member.universityName || purchase.userDetails?.universityName || '',
-                        totalAmount: purchase.amount || 0,
-                        items: (purchase.events || []).map(event => ({
-                            itemName: event,
-                            price: (purchase.amount || 0) / (purchase.events?.length || 1),
-                            quantity: 1
-                        }))
+                        orderId: purchase.orderId
                     };
 
                     const result = await sendRegistrationEmail(member.email, memberEmailData);

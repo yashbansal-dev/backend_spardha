@@ -1,7 +1,6 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const { Resend } = require('resend');
-const { generateInvoicePDF, generateTicketPosterPDF } = require('./pdfService');
 
 // Initialize Resend (Primary Provider)
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -27,7 +26,7 @@ async function sendEmailWithFallback(options) {
         try {
             console.log(`🚀 Attempting Resend for ${to}...`);
             const resendFrom = process.env.RESEND_FROM_EMAIL || 'no-reply@spardha.jklu.edu.in';
-            
+
             // Format attachments for Resend if they exist
             const resendAttachments = attachments ? attachments.map(att => ({
                 filename: att.filename,
@@ -114,127 +113,117 @@ function generateRegistrationEmailContent(userData) {
     <head>
         <style>
             body { 
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
                 line-height: 1.6; 
                 color: #ffffff; 
                 margin: 0; 
                 padding: 0; 
-                background-color: #020617; 
-            }
-            .wrapper {
-                background-color: #020617;
-                padding: 40px 20px;
+                background-color: #020617; /* Spardha Dark BG */
             }
             .container { 
                 max-width: 600px; 
                 margin: 0 auto; 
-                background-color: #1e293b; 
-                border-radius: 16px; 
+                background-color: #0f172a; /* Slightly lighter dark for card */
+                border-radius: 12px; 
                 overflow: hidden; 
-                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
                 border: 1px solid #334155;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             }
             .header { 
-                background: linear-gradient(135deg, #E37233 0%, #F2995C 100%); 
+                background: linear-gradient(135deg, #E37233 0%, #d97706 100%); /* Spardha Orange Gradient */
                 color: white; 
-                padding: 40px 30px; 
+                padding: 30px; 
                 text-align: center; 
-            }
-            .header h1 { 
-                margin: 0; 
-                font-size: 32px; 
-                letter-spacing: 2px;
-                text-transform: uppercase;
             }
             .content { 
-                padding: 40px 30px; 
+                padding: 30px; 
+                background-color: #0f172a; 
                 color: #e2e8f0;
             }
-            .user-badge {
-                display: inline-block;
-                background-color: #334155;
-                padding: 8px 16px;
-                border-radius: 20px;
-                font-size: 14px;
-                color: #F2995C;
-                font-weight: bold;
-                margin-bottom: 20px;
+            .details { 
+                background-color: #1e293b; 
+                color: #f8fafc; 
+                padding: 20px; 
+                margin: 20px 0; 
+                border-radius: 8px; 
+                border-left: 4px solid #E37233; /* Orange Accent */
             }
-            .details-card { 
-                background-color: #0f172a; 
-                padding: 25px; 
-                margin: 25px 0; 
-                border-radius: 12px; 
-                border-left: 5px solid #E37233;
-            }
-            .event-item {
-                font-size: 20px;
-                color: #fbbf24;
-                font-weight: bold;
-                margin-top: 10px;
-            }
-            .ticket-box { 
+            .ticket-section { 
                 text-align: center; 
-                margin: 40px 0; 
-                background: linear-gradient(to bottom, #1e293b, #0f172a);
-                padding: 30px; 
-                border-radius: 16px; 
-                border: 1px dashed #475569;
+                margin: 25px 0; 
+                background-color: #1e293b; 
+                padding: 25px; 
+                border-radius: 12px; 
+                border: 1px solid #334155;
             }
             .ticket-button { 
                 display: inline-block; 
-                background: #E37233; 
+                background: linear-gradient(135deg, #E37233 0%, #F2995C 100%); 
                 color: #ffffff; 
-                padding: 16px 40px; 
+                padding: 15px 35px; 
                 text-decoration: none; 
-                border-radius: 50px; 
-                font-weight: 800; 
-                letter-spacing: 1px;
+                border-radius: 30px; 
+                font-weight: bold; 
+                margin: 15px 0;
+                box-shadow: 0 4px 15px rgba(227, 114, 51, 0.4); /* Orange Glow */
                 text-transform: uppercase;
-                margin: 20px 0;
-                box-shadow: 0 10px 15px -3px rgba(227, 114, 51, 0.3);
+                letter-spacing: 1px;
             }
             .footer { 
                 text-align: center; 
-                padding: 30px; 
-                color: #64748b; 
-                font-size: 13px;
-                border-top: 1px solid #334155;
+                margin-top: 30px; 
+                color: #94a3b8; 
+                background-color: #020617; 
+                padding: 20px; 
+                font-size: 14px;
             }
-            strong { color: #f8fafc; }
+            .events-list { 
+                background-color: #020617; /* Darker nested bg */
+                color: #fbbf24; /* Amber text for events */
+                padding: 15px; 
+                border-radius: 6px;
+                margin-top: 10px;
+                font-family: monospace;
+            }
+            h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
+            h2 { color: #E37233; margin-top: 0; }
+            h3 { color: #f1f5f9; border-bottom: 2px solid #334155; padding-bottom: 10px; display: inline-block; }
+            p { color: #cbd5e1; }
+            strong { color: #F2995C; }
+            a { color: #E37233; text-decoration: none; }
         </style>
     </head>
     <body>
-        <div class="wrapper">
-            <div class="container">
-                <div class="header">
-                    <h1>🏆 SPARDHA'26</h1>
-                    <p style="opacity: 0.8; margin-top: 10px;">YOUR REGISTRATION IS CONFIRMED</p>
+        <div class="container">
+            <div class="header">
+                <h1>🏆 Welcome to Spardha'26!</h1>
+            </div>
+            
+            <div class="content">
+                <h2>Registration Confirmed!</h2>
+                <p>Hello <strong>${name}</strong>,</p>
+                <p>You are officially registered for <strong>Spardha'26</strong> - The Annual Sports Fest.</p>
+                
+                <div class="details">
+                    <h3>Your Details</h3>
+                    <p><strong>Name:</strong> ${name}</p>
+                    <div class="events-list">
+                        <strong>🏅 Events Registered:</strong><br />
+                        ${eventsText}
+                    </div>
                 </div>
                 
-                <div class="content">
-                    <div class="user-badge">OFFICIAL PARTICIPANT</div>
-                    <p style="font-size: 18px;">Hello <strong>${name}</strong>,</p>
-                    <p>Get ready for the adrenaline! You are officially registered for the biggest sports fest of the year.</p>
-                    
-                    <div class="details-card">
-                        <p style="margin: 0; font-size: 12px; color: #94a3b8; text-transform: uppercase;">Registered Events</p>
-                        <div class="event-item">${eventsText}</div>
-                    </div>
-                    
-                    <div class="ticket-box">
-                        <p style="color: #94a3b8;">Your digital entry pass is attached to this email as a PDF. Please ensure you show it at the gate for scanning.</p>
-                        <a href="${ticketLink}" class="ticket-button">View Online Pass</a>
-                    </div>
-                    
-                    <p style="font-size: 14px; text-align: center; color: #94a3b8;">
-                        Order ID: <code style="color: #E37233;">${orderId}</code>
-                    </p>
+                <div class="ticket-section">
+                    <h3>🎟️ Your Entry Ticket</h3>
+                    <p><strong>Your QR code is attached to this email.</strong></p>
+                    <p>Show this code at the entry gate for instant access.</p>
+                    <p style="margin-top: 20px;">Or view it online:</p>
+                    <a href="${ticketLink}" class="ticket-button">View Ticket</a>
                 </div>
                 
                 <div class="footer">
-                    <p>TEAM SPARDHA'26 • JK LAKSHMIPAT UNIVERSITY, JAIPUR</p>
-                    <p style="margin-top: 10px;">This is an automated confirmation email.</p>
+                    <p><strong>— Team Spardha'26 —</strong></p>
+                    <p>Need help? Reply to this email.</p>
                 </div>
             </div>
         </div>
@@ -268,47 +257,20 @@ Team Spardha'26
 }
 
 /**
- * Send registration email to user with QR code, Ticket PDF, and Invoice PDF
+ * Send registration email to user with QR code attachment
  */
 async function sendRegistrationEmail(userEmail, userData) {
     try {
-        console.log(`📧 Preparing registration email for ${userEmail}...`);
         const { htmlContent, textContent } = generateRegistrationEmailContent(userData);
         const attachments = [];
 
-        // 1. Add QR code as image attachment (standard)
+        // Add QR code as attachment if available
         if (userData.qrCodeBase64) {
             attachments.push({
-                filename: `spardha26-qr-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
+                filename: `spardha26-ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
                 content: Buffer.from(userData.qrCodeBase64, 'base64'),
                 contentType: "image/png"
             });
-        }
-
-        // 2. Generate and add Formal Invoice PDF
-        try {
-            console.log('📄 Generating Invoice PDF...');
-            const invoiceBuffer = await generateInvoicePDF(userData);
-            attachments.push({
-                filename: `Invoice-${userData.orderId}.pdf`,
-                content: invoiceBuffer,
-                contentType: 'application/pdf'
-            });
-        } catch (invError) {
-            console.error('❌ Failed to generate Invoice PDF:', invError.message);
-        }
-
-        // 3. Generate and add Digital Ticket / Poster PDF
-        try {
-            console.log('🎫 Generating Digital Ticket PDF...');
-            const ticketBuffer = await generateTicketPosterPDF(userData);
-            attachments.push({
-                filename: `Spardha26-Ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.pdf`,
-                content: ticketBuffer,
-                contentType: 'application/pdf'
-            });
-        } catch (tickError) {
-            console.error('❌ Failed to generate Ticket PDF:', tickError.message);
         }
 
         const result = await sendEmailWithFallback({
