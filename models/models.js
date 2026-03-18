@@ -252,7 +252,8 @@ const purchaseSchema = new mongoose.Schema({
     address: String,
     // Store complete form data
     formData: mongoose.Schema.Types.Mixed,
-    teamMembers: [mongoose.Schema.Types.Mixed]
+    // teamMembers is an object: { [eventId]: TeamMember[] } — NOT an array
+    teamMembers: mongoose.Schema.Types.Mixed
   },
 
   // Items and pricing

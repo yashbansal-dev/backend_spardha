@@ -197,11 +197,14 @@ async function processPaymentSuccess(orderId, paymentData = null) {
         for (const [eventId, members] of Object.entries(normalizedTeamData)) {
             if (!Array.isArray(members)) continue;
 
+            // Normalize helper: "Box Cricket (Boys)" → "box-cricket-boys"
+            const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
             const matchedItem = purchase.items.find(i =>
                 i.itemId === eventId ||
                 String(i.itemId) === String(eventId) ||
                 i.itemName === eventId ||
-                i.itemName.toLowerCase().replace(/[\(\)\s]/g, '-') === eventId.toLowerCase()
+                normalize(i.itemName) === normalize(eventId)
             );
 
             const eventName = matchedItem ? matchedItem.itemName : eventId;
@@ -750,8 +753,8 @@ router.post('/create-order', async (req, res) => {
                 customer_phone: cleanPhone
             },
             order_meta: {
-                // FORCE return to frontend URL to avoid any environment variable ambiguity
-                return_url: `https://spardha.jklu.edu.in/payment/success?order_id=${orderId}`
+                // Use FRONTEND_URL env variable for flexibility, fallback to production domain
+                return_url: `${process.env.FRONTEND_URL || 'https://spardha.jklu.edu.in'}/payment/success?order_id={order_id}`
             }
         };
 

@@ -683,4 +683,65 @@ router.get('/draft', async (req, res) => {
   }
 });
 
+// Save team members early (create User stubs)
+router.post('/save-team-members', async (req, res) => {
+  try {
+    const { teamMembers } = req.body;
+
+    if (!teamMembers || typeof teamMembers !== 'object') {
+      return res.status(400).json({ success: false, message: 'Invalid team members data' });
+    }
+
+    const savedResults = [];
+
+    // Iterate through each sport's team members
+    for (const [eventId, members] of Object.entries(teamMembers)) {
+      if (!Array.isArray(members)) continue;
+
+      for (const member of members) {
+        if (!member.email) continue;
+
+        const email = member.email.toLowerCase().trim();
+        
+        // Find or create user stub
+        let user = await User.findOne({ email });
+        
+        if (!user) {
+          user = new User({
+            email,
+            name: member.name || "Unknown Member",
+            contactNo: member.phone || "",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          await user.save();
+          savedResults.push({ email, status: 'created' });
+        } else {
+          // Update existing user if name/phone was provided and was missing
+          let modified = false;
+          if (!user.name && member.name) { user.name = member.name; modified = true; }
+          if (!user.contactNo && member.phone) { user.contactNo = member.phone; modified = true; }
+          
+          if (modified) {
+            user.updatedAt = new Date();
+            await user.save();
+            savedResults.push({ email, status: 'updated' });
+          } else {
+            savedResults.push({ email, status: 'exists' });
+          }
+        }
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Team members saved to database',
+      results: savedResults 
+    });
+  } catch (error) {
+    console.error('Error saving team members early:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 module.exports = router;
