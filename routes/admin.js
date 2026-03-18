@@ -4226,5 +4226,65 @@ router.get("/health", async (req, res) => {
   });
 });
 
+// Get all payments/purchases (admin only)
+router.get("/payments", verifyAdmin, async (req, res) => {
+  try {
+    const { page = 1, limit = 50, search, status } = req.query;
+
+    const filters = {};
+    if (status && status !== 'all') {
+      filters.paymentStatus = status;
+    }
+
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      filters.$or = [
+        { orderId: searchRegex },
+        { 'userDetails.name': searchRegex },
+        { 'userDetails.email': searchRegex },
+        { 'userDetails.contactNo': searchRegex }
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const purchases = await Purchase.find(filters)
+      .sort({ purchaseDate: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate('userId', 'name email events hasEntered')
+      .lean();
+
+    const totalCount = await Purchase.countDocuments(filters);
+
+    // Calculate sum for current filter
+    const totalAmountAgg = await Purchase.aggregate([
+      { $match: filters },
+      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+    ]);
+    const totalAmountFiltered = totalAmountAgg.length > 0 ? totalAmountAgg[0].total : 0;
+
+    res.json({
+      success: true,
+      data: purchases,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / parseInt(limit)),
+        totalCount,
+        limit: parseInt(limit),
+        hasNext: (parseInt(page) * parseInt(limit)) < totalCount,
+        hasPrev: parseInt(page) > 1
+      },
+      stats: {
+        totalAmountFiltered
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching payments:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 module.exports = router;
 
