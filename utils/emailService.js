@@ -1,6 +1,8 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const { Resend } = require('resend');
+const fs = require('fs');
+const path = require('path');
 
 // Initialize Resend (Primary Provider)
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -95,10 +97,17 @@ function generateRegistrationEmailContent(userData) {
             event &&
             typeof event === 'string' &&
             event.trim().length > 0 &&
-            event !== 'Demo Payment' &&
-            event !== 'Demo Event'
+            !event.toLowerCase().includes('select') &&
+            !event.toLowerCase().includes('none')
         );
-        eventsText = validEvents.length > 0 ? validEvents.join(', ') : 'General Registration - Spardha\'26';
+
+        if (validEvents.length > 0) {
+            eventsText = validEvents.join(', ');
+        } else {
+            eventsText = 'General Registration';
+        }
+    } else if (typeof events === 'string' && events.trim()) {
+        eventsText = events;
     } else {
         eventsText = 'General Registration - Spardha\'26';
     }
@@ -111,119 +120,222 @@ function generateRegistrationEmailContent(userData) {
     <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Alice&family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
         <style>
             body { 
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
                 line-height: 1.6; 
                 color: #ffffff; 
                 margin: 0; 
                 padding: 0; 
-                background-color: #020617; /* Spardha Dark BG */
+                background-color: #020617; 
+            }
+            .wrapper {
+                background-color: #020617;
+                padding: 20px 10px;
             }
             .container { 
                 max-width: 600px; 
                 margin: 0 auto; 
-                background-color: #0f172a; /* Slightly lighter dark for card */
-                border-radius: 12px; 
-                overflow: hidden; 
-                border: 1px solid #334155;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            }
-            .header { 
-                background: linear-gradient(135deg, #E37233 0%, #d97706 100%); /* Spardha Orange Gradient */
-                color: white; 
-                padding: 30px; 
-                text-align: center; 
-            }
-            .content { 
-                padding: 30px; 
                 background-color: #0f172a; 
-                color: #e2e8f0;
+                border-radius: 24px; 
+                overflow: hidden; 
+                border: 1px solid #1e293b;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             }
-            .details { 
-                background-color: #1e293b; 
-                color: #f8fafc; 
-                padding: 20px; 
-                margin: 20px 0; 
-                border-radius: 8px; 
-                border-left: 4px solid #E37233; /* Orange Accent */
+            .top-bar {
+                padding: 50px 30px 40px;
+                text-align: center;
+                background: radial-gradient(circle at top, #1e3a8a 0%, #020617 100%);
             }
-            .ticket-section { 
-                text-align: center; 
-                margin: 25px 0; 
-                background-color: #1e293b; 
-                padding: 25px; 
-                border-radius: 12px; 
-                border: 1px solid #334155;
+            .logo-img {
+                height: 80px;
+                width: auto;
+                display: inline-block;
+                filter: drop-shadow(0 0 15px rgba(249, 115, 22, 0.4));
             }
-            .ticket-button { 
-                display: inline-block; 
-                background: linear-gradient(135deg, #E37233 0%, #F2995C 100%); 
-                color: #ffffff; 
-                padding: 15px 35px; 
-                text-decoration: none; 
-                border-radius: 30px; 
-                font-weight: bold; 
-                margin: 15px 0;
-                box-shadow: 0 4px 15px rgba(227, 114, 51, 0.4); /* Orange Glow */
+            .brand-name {
+                font-family: 'Gang of Three', 'Inter', sans-serif;
+                font-size: 52px;
+                font-weight: 900;
+                letter-spacing: 10px;
+                color: #ffffff;
+                margin: 20px 0 0;
                 text-transform: uppercase;
+                text-shadow: 0 0 25px rgba(59, 130, 246, 0.9);
+            }
+            .brand-subtext {
+                font-family: 'Inter', sans-serif;
+                font-size: 12px;
+                color: #f97316;
+                text-transform: uppercase;
+                letter-spacing: 6px;
+                margin-top: 5px;
+                font-weight: 800;
+            }
+            .main-content {
+                padding: 50px 30px;
+                text-align: center;
+                position: relative;
+            }
+            .success-badge {
+                display: inline-block;
+                background: rgba(249, 115, 22, 0.1);
+                color: #f97316;
+                padding: 8px 16px;
+                border-radius: 30px;
+                font-size: 12px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                border: 1px solid rgba(249, 115, 22, 0.2);
+                margin-bottom: 20px;
+            }
+            .welcome-title {
+                font-family: 'Alice', serif;
+                font-size: 32px;
+                color: #ffffff;
+                margin: 0 0 10px;
+            }
+            .highlight {
+                color: #f97316;
+                font-weight: bold;
+            }
+            .entry-msg {
+                font-size: 16px;
+                color: #94a3b8;
+                margin: 0 0 40px;
+            }
+            .details-grid {
+                background: rgba(30, 41, 59, 0.5);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: 20px;
+                padding: 30px;
+                text-align: left;
+                margin-bottom: 40px;
+            }
+            .detail-row {
+                margin-bottom: 20px;
+            }
+            .detail-row:last-child {
+                margin-bottom: 0;
+            }
+            .label {
+                font-family: 'Inter', sans-serif;
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                color: #64748b;
+                display: block;
+                margin-bottom: 6px;
+                font-weight: 800;
+            }
+            .value {
+                font-family: 'Alice', serif;
+                font-size: 20px;
+                color: #ffffff;
+            }
+            .qr-section {
+                background: #020617;
+                border: 1px solid #1e293b;
+                border-radius: 24px;
+                padding: 40px 20px;
+                margin-bottom: 40px;
+            }
+            .qr-label {
+                font-family: 'Inter', sans-serif;
+                font-weight: 900;
+                color: #ffffff;
+                font-size: 14px;
+                text-transform: uppercase;
+                letter-spacing: 3px;
+                margin-bottom: 30px;
+            }
+            .qr-box {
+                background: #ffffff;
+                padding: 15px;
+                border-radius: 16px;
+                display: inline-block;
+                margin-bottom: 30px;
+                box-shadow: 0 0 30px rgba(249, 115, 22, 0.2);
+                border: 2px solid #f97316;
+            }
+            .qr-info {
+                color: #64748b;
+                font-size: 13px;
+                margin-bottom: 0;
+            }
+            .cta-btn {
+                display: block;
+                background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+                color: #ffffff !important;
+                text-decoration: none;
+                padding: 20px;
+                border-radius: 16px;
+                font-weight: 900;
+                font-size: 16px;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                box-shadow: 0 15px 30px rgba(234, 88, 12, 0.3);
+                margin-bottom: 50px;
+            }
+            .footer {
+                border-top: 1px solid #1e293b;
+                padding-top: 40px;
+                color: #475569;
+                font-size: 12px;
+            }
+            .team-name {
+                font-weight: 900;
+                color: #ffffff;
                 letter-spacing: 1px;
             }
-            .footer { 
-                text-align: center; 
-                margin-top: 30px; 
-                color: #94a3b8; 
-                background-color: #020617; 
-                padding: 20px; 
-                font-size: 14px;
-            }
-            .events-list { 
-                background-color: #020617; /* Darker nested bg */
-                color: #fbbf24; /* Amber text for events */
-                padding: 15px; 
-                border-radius: 6px;
-                margin-top: 10px;
-                font-family: monospace;
-            }
-            h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
-            h2 { color: #E37233; margin-top: 0; }
-            h3 { color: #f1f5f9; border-bottom: 2px solid #334155; padding-bottom: 10px; display: inline-block; }
-            p { color: #cbd5e1; }
-            strong { color: #F2995C; }
-            a { color: #E37233; text-decoration: none; }
         </style>
     </head>
     <body>
-        <div class="container">
-            <div class="header">
-                <h1>🏆 Welcome to Spardha'26!</h1>
-            </div>
-            
-            <div class="content">
-                <h2>Registration Confirmed!</h2>
-                <p>Hello <strong>${name}</strong>,</p>
-                <p>You are officially registered for <strong>Spardha'26</strong> - The Annual Sports Fest.</p>
-                
-                <div class="details">
-                    <h3>Your Details</h3>
-                    <p><strong>Name:</strong> ${name}</p>
-                    <div class="events-list">
-                        <strong>🏅 Events Registered:</strong><br />
-                        ${eventsText}
+        <div class="wrapper">
+            <div class="container">
+                <div class="top-bar">
+                    <img src="cid:brand_logo" alt="Spardha" class="logo-img" />
+                    <h1 class="brand-name">SPARDHA'26</h1>
+                    <div class="brand-subtext">The Annual Sports Fest</div>
+                </div>
+
+                <div class="main-content">
+                    <div class="success-badge">Entry Granted</div>
+                    <h2 class="welcome-title">Welcome, <span class="highlight">${name}</span>!</h2>
+                    <p class="entry-msg">You're officially registered for the arena.</p>
+
+                    <div class="details-grid">
+                        <div class="detail-row">
+                            <span class="label">Registrant Details</span>
+                            <span class="value">${name}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">Sporting Events</span>
+                            <span class="value" style="color: #fbbf24;">${eventsText}</span>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="ticket-section">
-                    <h3>🎟️ Your Entry Ticket</h3>
-                    <p><strong>Your QR code is attached to this email.</strong></p>
-                    <p>Show this code at the entry gate for instant access.</p>
-                    <p style="margin-top: 20px;">Or view it online:</p>
-                    <a href="${ticketLink}" class="ticket-button">View Ticket</a>
-                </div>
-                
-                <div class="footer">
-                    <p><strong>— Team Spardha'26 —</strong></p>
-                    <p>Need help? Reply to this email.</p>
+
+                    <div class="qr-section">
+                        <div class="qr-label">Digital Access Pass</div>
+                        <div class="qr-box">
+                            <img src="cid:qr_code" width="180" height="180" alt="Ticket QR" />
+                        </div>
+                        <p class="qr-info">Please present this code at the gate</p>
+                    </div>
+
+                    <a href="${ticketLink}" class="cta-btn">VIEW TICKET ONLINE</a>
+
+                    <div class="footer">
+                        <p class="team-name">— Team Spardha'26 —</p>
+                        <p>Questions? Reach us at <a href="mailto:team@spardha.jklu.edu.in" style="color: #f97316; text-decoration: none;">team@spardha.jklu.edu.in</a></p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -232,25 +344,24 @@ function generateRegistrationEmailContent(userData) {
     `;
 
     const textContent = `
-🏆 Welcome to Spardha'26!
+🏆 SPARDHA'26 - The Annual Sports Fest 🏆
 
-Registration Confirmed!
+REGISTRATION SUCCESSFUL!
+
 Hello ${name},
 
 You are officially registered for Spardha'26.
 
-Your Details:
-Name: ${name}
-Events: ${eventsText}
+YOUR DETAILS:
+- Name: ${name}
+- Events: ${eventsText}
 
-Your Entry Ticket:
-Your QR code is attached to this email.
-Please save it and show it at the entry gate.
+YOUR ENTRY TICKET:
+Your QR code pass is attached to this email. Please scan it at the gate for instant access.
 
 View Ticket Online: ${ticketLink}
 
-—
-Team Spardha'26
+— Team Spardha'26 —
     `;
 
     return { htmlContent, textContent };
@@ -264,12 +375,23 @@ async function sendRegistrationEmail(userEmail, userData) {
         const { htmlContent, textContent } = generateRegistrationEmailContent(userData);
         const attachments = [];
 
-        // Add QR code as attachment if available
+        // 1. Add Brand Logo CID
+        const logoPath = path.join(__dirname, '../public/spardha_logo.png');
+        if (fs.existsSync(logoPath)) {
+            attachments.push({
+                filename: 'spardha_logo.png',
+                content: fs.readFileSync(logoPath),
+                cid: 'brand_logo'
+            });
+        }
+
+        // 2. Add QR code as CID attachment if available
         if (userData.qrCodeBase64) {
             attachments.push({
                 filename: `spardha26-ticket-${userData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
                 content: Buffer.from(userData.qrCodeBase64, 'base64'),
-                contentType: "image/png"
+                contentType: "image/png",
+                cid: 'qr_code'
             });
         }
 
@@ -435,13 +557,27 @@ async function sendPaymentInitiatedEmail(paymentData) {
         const { htmlContent, textContent } = generatePaymentInitiationEmailContent(paymentData);
         const attachments = [];
 
-        // Add QR code as attachment if available (for non-OTP emails)
-        if (!otp && paymentData.qrCodeBase64) {
-            attachments.push({
-                filename: `spardha26-ticket-${paymentData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
-                content: Buffer.from(paymentData.qrCodeBase64, 'base64'),
-                contentType: "image/png"
-            });
+        // Add attachments (only for non-OTP emails)
+        if (!otp) {
+            // 1. Add Brand Logo CID
+            const logoPath = path.join(__dirname, '../public/spardha_logo.png');
+            if (fs.existsSync(logoPath)) {
+                attachments.push({
+                    filename: 'spardha_logo.png',
+                    content: fs.readFileSync(logoPath),
+                    cid: 'brand_logo'
+                });
+            }
+
+            // 2. Add QR code as CID attachment
+            if (paymentData.qrCodeBase64) {
+                attachments.push({
+                    filename: `spardha26-ticket-${paymentData.name.replace(/[^a-zA-Z0-9]/g, '')}.png`,
+                    content: Buffer.from(paymentData.qrCodeBase64, 'base64'),
+                    contentType: "image/png",
+                    cid: 'qr_code'
+                });
+            }
         }
 
         const result = await sendEmailWithFallback({
