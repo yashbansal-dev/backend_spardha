@@ -8,7 +8,8 @@ const bcrypt = require("bcrypt");
 
 async function login(req, res) {
   try {
-    const user = await User.findOne({ email: req.body.email });
+    const email = req.body.email ? String(req.body.email).toLowerCase().trim() : '';
+    const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(401).json({
@@ -83,7 +84,8 @@ async function signup(req, res) {
       });
     }
 
-    const existingUser = await User.findOne({ email: req.body.email });
+    const email = req.body.email ? String(req.body.email).toLowerCase().trim() : '';
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -99,7 +101,7 @@ async function signup(req, res) {
 
     const newUser = await User.create({
       name: req.body.username,
-      email: req.body.email,
+      email: email,
       password: hashedPassword, // Store the hashed password
       referalID: referralID,
       referralCode: req.body.referralCode || ""

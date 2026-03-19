@@ -16,11 +16,13 @@ const router = express.Router();
 // Called from both GET /success/:orderId and the Webhook handler
 // -----------------------------------------------------------------------
 async function processPaymentSuccess(orderId, paymentData = null) {
-    // Sanitize paymentMethod to be a string, since Cashfree sometimes returns an object
-    if (paymentData && paymentData.paymentMethod && typeof paymentData.paymentMethod === 'object') {
-        paymentData.paymentMethod = JSON.stringify(paymentData.paymentMethod);
-    } else if (paymentData && paymentData.paymentMethod) {
-        paymentData.paymentMethod = String(paymentData.paymentMethod);
+    // Sanitize paymentMethod to be a string
+    if (paymentData && paymentData.paymentMethod) {
+        if (typeof paymentData.paymentMethod === 'object') {
+            paymentData.paymentMethod = JSON.stringify(paymentData.paymentMethod);
+        } else {
+            paymentData.paymentMethod = String(paymentData.paymentMethod);
+        }
     }
 
     console.log('🎉 processPaymentSuccess called for order:', orderId);
@@ -30,7 +32,7 @@ async function processPaymentSuccess(orderId, paymentData = null) {
     // Instead of findOne, we atomically attempt to lock the document
     // by finding it AND updating it ONLY IF it's not already completed.
     // ──────────────────────────────────────────────────────────────────
-    const purchase = await Purchase.findOneAndUpdate(
+    let purchase = await Purchase.findOneAndUpdate(
         {
             orderId: orderId,
             paymentStatus: { $ne: 'completed' } // Only lock if NOT already completed
@@ -68,22 +70,36 @@ async function processPaymentSuccess(orderId, paymentData = null) {
             }
         }
 
-        // Skip full processing
         if (updatedFields) {
             await existingPurchase.save();
             console.log('✅ Updated transaction details for already completed order:', orderId);
         }
-        
-        console.log('✅ Payment already fully processed (or locked) for order:', orderId);
-        
+
+        // --- ROBUST IDEMPOTENCY CHECK ---
+        // If the order was marked 'completed' but userRegistered is still false, 
+        // OR if userRegistered is true but the user document is missing,
+        // we MUST continue to create the user.
         let user = null;
         if (existingPurchase.userId) {
             user = await User.findById(existingPurchase.userId);
         } else if (existingPurchase.userDetails?.email) {
-            user = await User.findOne({ email: existingPurchase.userDetails.email });
+            const normalizedEmail = existingPurchase.userDetails.email.toLowerCase().trim();
+            user = await User.findOne({ email: normalizedEmail });
+        }
+
+        if (existingPurchase.userRegistered && user) {
+            console.log('✅ Payment already fully processed (inclusive of user registration) for order:', orderId);
+            return { success: true, alreadyProcessed: true, purchase: existingPurchase, user };
+        }
+
+        if (existingPurchase.userRegistered && !user) {
+            console.log('⚠️ Order is marked registered but user document is missing. Healing...');
+        } else {
+            console.log('⚠️ Order is completed but user was never registered. Continuing registration flow...');
         }
         
-        return { success: true, alreadyProcessed: true, purchase: existingPurchase, user };
+        // If we reach here, we continue the function execution to register the user
+        purchase = existingPurchase; 
     }
 
     // AT THIS POINT: THIS EXECUTION THREAD HAS EXCLUSIVE PROCESSING RIGHTS
@@ -100,15 +116,17 @@ async function processPaymentSuccess(orderId, paymentData = null) {
         if (user) console.log(`👤 Found user by userId: ${user.email}`);
     }
     if (!user && purchase.userDetails?.email) {
-        user = await User.findOne({ email: purchase.userDetails.email });
-        if (user) console.log(`👤 Found user by email: ${user.email}`);
+        const normalizedEmail = purchase.userDetails.email.toLowerCase().trim();
+        user = await User.findOne({ email: normalizedEmail });
+        if (user) console.log(`👤 Found user by email: ${user.email} (normalized)`);
     }
 
     if (!user) {
-        console.log('👤 Creating new user for email:', purchase.userDetails.email);
+        const normalizedEmail = purchase.userDetails.email.toLowerCase().trim();
+        console.log('👤 Creating new user for email:', normalizedEmail);
         user = new User({
             name: purchase.userDetails.name,
-            email: purchase.userDetails.email,
+            email: normalizedEmail,
             contactNo: purchase.userDetails.contactNo || '',
             gender: purchase.userDetails.gender || '',
             age: purchase.userDetails.age || null,

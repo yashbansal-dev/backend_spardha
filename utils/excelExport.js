@@ -204,8 +204,12 @@ async function generateExcelReport(outputPath) {
                     transactionId: purchaseMap[user.email?.toLowerCase()?.trim()]?.transactionId || purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentSessionId || '',
                     orderId: purchaseMap[user.email?.toLowerCase()?.trim()]?.orderId || '',
                     paymentMethod: purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentMethod || '',
-                    teamMembers: (purchaseMap[user.email?.toLowerCase()?.trim()]?.userDetails?.teamMembers || [])
-                        .map(m => `${m.name} (${m.email})`).join(', '),
+                    teamMembers: (Array.isArray(purchaseMap[user.email?.toLowerCase()?.trim()]?.userDetails?.teamMembers) 
+                        ? purchaseMap[user.email?.toLowerCase()?.trim()].userDetails.teamMembers 
+                        : [])
+                        .map(m => `${m.name || ''} (${m.email || ''})`)
+                        .filter(s => s !== ' ()')
+                        .join(', '),
                     emailSent: user.emailSent ? 'Yes' : 'No',
                     hasEntered: user.hasEntered ? 'Yes' : 'No',
                     createdAt: user.createdAt ? new Date(user.createdAt).toLocaleString('en-IN') : '',
@@ -236,7 +240,9 @@ async function generateExcelReport(outputPath) {
                         transactionId: purchaseMap[user.email?.toLowerCase()?.trim()]?.transactionId || purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentSessionId || '',
                         orderId: purchaseMap[user.email?.toLowerCase()?.trim()]?.orderId || '',
                         paymentMethod: purchaseMap[user.email?.toLowerCase()?.trim()]?.paymentMethod || '',
-                        teamMembers: (purchaseMap[user.email?.toLowerCase()?.trim()]?.userDetails?.teamMembers || [])
+                        teamMembers: (Array.isArray(purchaseMap[user.email?.toLowerCase()?.trim()]?.userDetails?.teamMembers)
+                            ? purchaseMap[user.email?.toLowerCase()?.trim()].userDetails.teamMembers
+                            : [])
                             .map(m => `${m.name || ''} (${m.email || ''})`)
                             .filter(s => s !== ' ()')
                             .join(', '),

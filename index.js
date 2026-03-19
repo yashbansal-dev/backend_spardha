@@ -357,7 +357,7 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
     try { if (raw.items) items = JSON.parse(raw.items); } catch (e) { }
 
     const mainPersonName = raw.name;
-    const mainPersonEmail = raw.email;
+    const mainPersonEmail = raw.email ? String(raw.email).toLowerCase().trim() : null;
     const password = raw.password;
     const mainPersonContactNo = raw.contactNo;
     const mainPersonGender = raw.gender;
