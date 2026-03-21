@@ -132,8 +132,8 @@ async function processPaymentSuccess(orderId, paymentData = null) {
             age: purchase.userDetails.age || null,
             universityName: purchase.userDetails.universityName || '',
             address: purchase.userDetails.address || '',
-            universityIdCard: purchase.userDetails.formData?.universityIdCard || '',
-            referralCode: purchase.userDetails.formData?.referralCode || '',
+            universityIdCard: purchase.userDetails.universityIdCard || purchase.userDetails.formData?.universityIdCard || '',
+            referralCode: purchase.userDetails.referralCode || purchase.userDetails.formData?.referralCode || '',
             referalID: shortid.generate(), // 🔥 Generate their OWN referral code
             events: eventNames.length > 0 ? eventNames : ['General Registration'],
             isvalidated: true
@@ -146,8 +146,12 @@ async function processPaymentSuccess(orderId, paymentData = null) {
         if (purchase.userDetails.age) user.age = purchase.userDetails.age;
         if (purchase.userDetails.universityName) user.universityName = purchase.userDetails.universityName;
         if (purchase.userDetails.address) user.address = purchase.userDetails.address;
-        if (purchase.userDetails.formData?.universityIdCard) user.universityIdCard = purchase.userDetails.formData.universityIdCard;
-        if (purchase.userDetails.formData?.referralCode) user.referralCode = purchase.userDetails.formData.referralCode;
+        if (purchase.userDetails.universityIdCard || purchase.userDetails.formData?.universityIdCard) {
+            user.universityIdCard = purchase.userDetails.universityIdCard || purchase.userDetails.formData.universityIdCard;
+        }
+        if (purchase.userDetails.referralCode || purchase.userDetails.formData?.referralCode) {
+            user.referralCode = purchase.userDetails.referralCode || purchase.userDetails.formData.referralCode;
+        }
 
         if (eventNames.length > 0) {
             const currentEvents = user.events || [];
@@ -722,6 +726,8 @@ router.post('/create-order', async (req, res) => {
                 gender: customerGender,
                 age: customerAge,
                 universityName: universityName,
+                universityIdCard: universityIdCard || req.body.universityIdCard || '',
+                referralCode: referralCode || req.body.referralCode || '',
                 address: address,
                 teamMembers: teamMembers,
                 formData: req.body
