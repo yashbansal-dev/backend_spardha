@@ -387,11 +387,19 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
       });
       await mainPerson.save();
     } else {
-      // Update existing user events
+      // Update existing user with provided details and events
+      mainPerson.name = mainPersonName || mainPerson.name;
+      mainPerson.contactNo = mainPersonContactNo || mainPerson.contactNo;
+      mainPerson.gender = mainPersonGender || mainPerson.gender;
+      mainPerson.universityName = mainPersonUniversity || mainPerson.universityName;
+      mainPerson.address = mainPersonAddress || mainPerson.address;
+      mainPerson.isvalidated = true; // Mark as validated when they complete registration
+
       const newEvents = items.map(i => i.title);
       // Add only unique new events
-      const uniqueEvents = [...new Set([...mainPerson.events, ...newEvents])];
+      const uniqueEvents = [...new Set([...(mainPerson.events || []), ...newEvents])];
       mainPerson.events = uniqueEvents;
+      
       await mainPerson.save();
     }
 

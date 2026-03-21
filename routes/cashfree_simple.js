@@ -147,10 +147,10 @@ async function processPaymentSuccess(orderId, paymentData = null) {
         if (purchase.userDetails.universityName) user.universityName = purchase.userDetails.universityName;
         if (purchase.userDetails.address) user.address = purchase.userDetails.address;
         if (purchase.userDetails.universityIdCard || purchase.userDetails.formData?.universityIdCard) {
-            user.universityIdCard = purchase.userDetails.universityIdCard || purchase.userDetails.formData.universityIdCard;
+            user.universityIdCard = purchase.userDetails.universityIdCard || purchase.userDetails.formData?.universityIdCard;
         }
         if (purchase.userDetails.referralCode || purchase.userDetails.formData?.referralCode) {
-            user.referralCode = purchase.userDetails.referralCode || purchase.userDetails.formData.referralCode;
+            user.referralCode = purchase.userDetails.referralCode || purchase.userDetails.formData?.referralCode;
         }
 
         if (eventNames.length > 0) {
@@ -182,6 +182,18 @@ async function processPaymentSuccess(orderId, paymentData = null) {
         }
     } else {
         console.log('ℹ️ QR code already exists for main user');
+    }
+
+    // Add to registration history
+    const alreadyRegistered = user.registrationHistory?.some(h => h.purchaseId?.toString() === purchase._id.toString());
+    if (!alreadyRegistered) {
+        if (!user.registrationHistory) user.registrationHistory = [];
+        user.registrationHistory.push({
+            purchaseId: purchase._id,
+            registrationType: purchase.userDetails?.teamMembers ? 'team-leader' : 'individual',
+            eventsRegistered: eventNames,
+            registeredAt: new Date()
+        });
     }
 
     await user.save();
@@ -251,9 +263,21 @@ async function processPaymentSuccess(orderId, paymentData = null) {
                 } else {
                     if (!memberUser.events.includes(eventName)) {
                         memberUser.events.push(eventName);
-                        await memberUser.save();
                     }
                 }
+
+                // Add to registration history for member
+                const memberAlreadyRegistered = memberUser.registrationHistory?.some(h => h.purchaseId?.toString() === purchase._id.toString());
+                if (!memberAlreadyRegistered) {
+                    if (!memberUser.registrationHistory) memberUser.registrationHistory = [];
+                    memberUser.registrationHistory.push({
+                        purchaseId: purchase._id,
+                        registrationType: 'team-member',
+                        eventsRegistered: [eventName],
+                        registeredAt: new Date()
+                    });
+                }
+                await memberUser.save();
                 memberObjects.push({
                     userId: memberUser._id,
                     name: m.name,
@@ -594,6 +618,7 @@ router.post('/create-order', async (req, res) => {
             items,
             // Capture other fields
             referralCode,
+            universityIdCard, // Added missing destructuring
             customerGender,
             customerAge,
             universityName,
@@ -800,7 +825,7 @@ router.post('/create-order', async (req, res) => {
 
         } catch (cfError) {
             const errorMsg = cfError.response?.data?.message || cfError.message;
-            console.error('❌ Costfree Init Failed:', errorMsg);
+            console.error('❌ Cashfree Init Failed:', errorMsg);
 
             // Mark DB as failed so we don't have infinite pending orders
             newPurchase.paymentStatus = 'failed';

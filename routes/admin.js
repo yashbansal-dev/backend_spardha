@@ -1154,6 +1154,10 @@ router.get("/recent-registrations", verifyAdmin, async (req, res) => {
 
     if (isValidated !== undefined && isValidated !== 'all') {
       filters.isvalidated = isValidated === 'true';
+    } else if (!search) {
+      // DEFAULT: Only show validated users (actual registrations) 
+      // when not performing a search. This filters out team member stubs.
+      filters.isvalidated = true;
     }
 
     if (emailSent !== undefined && emailSent !== 'all') {
