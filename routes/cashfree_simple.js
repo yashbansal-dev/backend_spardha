@@ -663,53 +663,51 @@ router.post('/create-order', async (req, res) => {
 
             console.log(`🔍 Searching for event: "${eventName}" (Category: "${category}")`);
 
-            // Helper to escape regex special characters
-            const escapeRegex = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Fetch potential matches once
+            const searchPattern = eventName.split(' ')[0] || eventName;
+            const allCandidates = await Event.find({ 
+                name: { $regex: searchPattern, $options: 'i' } 
+            }).lean();
 
-            // Smart Lookup Logic:
             let event = null;
 
-            // 1. Try case-insensitive exact match
-            event = await Event.findOne({ name: { $regex: `^${escapeRegex(eventName)}$`, $options: 'i' } });
+            // 1. Try Exact match for constructed name
+            const targetFull = category && category !== 'Open' ? `${eventName} (${category})` : eventName;
+            event = allCandidates.find(e => e.name.toLowerCase().trim() === targetFull.toLowerCase().trim());
 
-            // 2. Try "Event (Category)" variant
-            if (!event && category && category !== 'Open') {
-                const specificName = `${eventName} (${category})`;
-                console.log(`🔍 Trying specific variant: "${specificName}"`);
-                event = await Event.findOne({ name: { $regex: `^${escapeRegex(specificName)}$`, $options: 'i' } });
-
-                // Try reverse: if eventName already has category but frontend sent both
-                if (!event && eventName.toLowerCase().includes(category.toLowerCase())) {
-                    event = await Event.findOne({ name: { $regex: `^${escapeRegex(eventName)}$`, $options: 'i' } });
-                }
+            if (!event) {
+                // 2. Try Exact match for eventName itself
+                event = allCandidates.find(e => e.name.toLowerCase().trim() === eventName.toLowerCase().trim());
             }
 
-            // 3. Last resort: Partial match logic
             if (!event) {
-                console.log(`🔍 Trying partial match for: "${eventName}"`);
-                // Find all events starting with this name or containing it
-                const matches = await Event.find({ name: { $regex: `${escapeRegex(eventName)}`, $options: 'i' } });
-                if (matches.length === 1) {
-                    event = matches[0];
-                    console.log(`✅ Auto-matched partial: "${eventName}" -> "${event.name}"`);
-                } else if (matches.length > 1) {
-                    // Try to find one that matches the category if available
+                // 3. Smart Partial matching
+                const filtered = allCandidates.filter(e => 
+                    e.name.toLowerCase().includes(eventName.toLowerCase())
+                );
+
+                if (filtered.length === 1) {
+                    event = filtered[0];
+                } else if (filtered.length > 1) {
+                    // Try to match category
                     if (category) {
-                        event = matches.find(m => m.name.toLowerCase().includes(category.toLowerCase()));
-                        if (event) console.log(`✅ Auto-matched multi-partial with category: "${event.name}"`);
+                        event = filtered.find(e => e.name.toLowerCase().includes(category.toLowerCase()));
                     }
-                    // If still no event, pick the first one as a best guess IF it's an exact match in some way
                     if (!event) {
-                        event = matches.find(m => m.name.toLowerCase() === eventName.toLowerCase());
+                        event = filtered[0]; // pick first if still no match
                     }
                 }
             }
 
             if (!event) {
-                console.error(`❌ Event NOT found: "${eventName}"`);
+                console.error(`❌ Event NOT found in database: "${eventName}" (Category: ${category})`);
                 missingEvents.push(eventName);
                 continue;
             }
+
+            console.log(`✅ Matched to: "${event.name}" (Price: ${event.price})`);
+
+            console.log(`✅ Found event: "${event.name}" (Price: ${event.price})`);
 
             // Trust ONLY the DB price
             const realPrice = parseFloat(event.price || 0);
