@@ -654,6 +654,38 @@ router.post('/save-draft', async (req, res) => {
       { upsert: true, new: true }
     );
 
+    // --- NEW: Sync with User collection early (Stub creation) ---
+    // This ensures that even if they don't pay immediately, their details are captured.
+    if (userData && userData.fullName && email) {
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // We use a separate update to avoid interfering with any existing 'isvalidated: true' status
+      const userUpdate = {
+        name: userData.fullName,
+        contactNo: userData.phone || "",
+        gender: userData.gender || "",
+        age: userData.age && userData.age !== "" ? Number(userData.age) : null,
+        universityName: userData.college || "",
+        address: userData.address || "",
+        universityIdCard: userData.universityIdCard || "",
+        referralCode: userData.referralCode || "",
+        updatedAt: new Date()
+      };
+
+      await User.findOneAndUpdate(
+        { email: normalizedEmail },
+        {
+          $set: userUpdate,
+          $setOnInsert: {
+             isvalidated: false,
+             events: [],
+             createdAt: new Date()
+          }
+        },
+        { upsert: true, new: true }
+      );
+    }
+
     res.json({ success: true, message: 'Draft saved' });
   } catch (error) {
     console.error('Error saving draft:', error);

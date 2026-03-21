@@ -141,17 +141,26 @@ async function processPaymentSuccess(orderId, paymentData = null) {
     } else {
         user.isvalidated = true; // ✅ Mark as validated on successful payment
         if (!user.referalID) user.referalID = shortid.generate(); // ✅ Ensure they have a referral ID
+        
+        // Robust field updates with fallbacks to formData
         if (purchase.userDetails.contactNo) user.contactNo = purchase.userDetails.contactNo;
-        if (purchase.userDetails.gender) user.gender = purchase.userDetails.gender;
-        if (purchase.userDetails.age) user.age = purchase.userDetails.age;
-        if (purchase.userDetails.universityName) user.universityName = purchase.userDetails.universityName;
-        if (purchase.userDetails.address) user.address = purchase.userDetails.address;
+        
+        user.gender = purchase.userDetails.gender || purchase.userDetails.formData?.customerGender || user.gender || "";
+        
+        const rawAge = purchase.userDetails.age || purchase.userDetails.formData?.customerAge;
+        if (rawAge) user.age = Number(rawAge);
+        
+        user.universityName = purchase.userDetails.universityName || purchase.userDetails.formData?.universityName || user.universityName || "";
+        user.address = purchase.userDetails.address || purchase.userDetails.formData?.address || user.address || "";
+
         if (purchase.userDetails.universityIdCard || purchase.userDetails.formData?.universityIdCard) {
             user.universityIdCard = purchase.userDetails.universityIdCard || purchase.userDetails.formData?.universityIdCard;
         }
         if (purchase.userDetails.referralCode || purchase.userDetails.formData?.referralCode) {
             user.referralCode = purchase.userDetails.referralCode || purchase.userDetails.formData?.referralCode;
         }
+        
+        console.log(`✅ Updated existing user details for: ${user.email}`);
 
         if (eventNames.length > 0) {
             const currentEvents = user.events || [];
