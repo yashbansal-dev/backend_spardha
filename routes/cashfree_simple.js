@@ -275,8 +275,16 @@ async function processPaymentSuccess(orderId, paymentData = null) {
 
             const eventName = matchedItem ? matchedItem.itemName : eventId;
 
+            // 🛡️ SECURITY: Only process team members if the event actually allows them
+            const { Event } = require('../models/models'); // Lazy require to avoid circular dependency
+            const eventDoc = await Event.findOne({ name: eventName });
+            if (eventDoc && eventDoc.maxPlayers <= 1) {
+                console.log(`⚠️  Skipping team members for individual sport: ${eventName}`);
+                continue;
+            }
 
             console.log(`   🏆 Creating Team for: ${eventName}`);
+
 
             const memberObjects = [];
             for (const m of members) {
