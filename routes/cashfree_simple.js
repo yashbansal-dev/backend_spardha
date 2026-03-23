@@ -259,14 +259,22 @@ async function processPaymentSuccess(orderId, paymentData = null) {
             // Normalize helper: "Box Cricket (Boys)" → "box-cricket-boys"
             const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
-            const matchedItem = purchase.items.find(i =>
-                i.itemId === eventId ||
-                String(i.itemId) === String(eventId) ||
-                i.itemName === eventId ||
-                normalize(i.itemName) === normalize(eventId)
+            // 🔍 Robust Item Matching
+            let matchedItem = purchase.items.find(i =>
+                (i.cartId && String(i.cartId) === String(eventId)) ||
+                (i.itemId && String(i.itemId) === String(eventId)) ||
+                (i.itemName && i.itemName === eventId) ||
+                (i.itemName && normalize(i.itemName) === normalize(eventId))
             );
 
+            // Fallback: If only ONE event in purchase and it's an "item-..." ID, assume it's that one
+            if (!matchedItem && purchase.items.length === 1) {
+                matchedItem = purchase.items[0];
+                console.log(`📡 Fallback: Matched "${eventId}" to একমাত্র item "${matchedItem.itemName}"`);
+            }
+
             const eventName = matchedItem ? matchedItem.itemName : eventId;
+
 
             console.log(`   🏆 Creating Team for: ${eventName}`);
 
@@ -765,10 +773,12 @@ router.post('/create-order', async (req, res) => {
             processedItems.push({
                 type: 'event',
                 itemId: event._id,
+                cartId: item.id || item.itemId || item._id, // 🔥 Preserve original cart ID
                 itemName: event.name,
                 price: realPrice,
                 quantity: quantity
             });
+
 
             console.log(`   - Verified: "${event.name}" @ ₹${realPrice} x ${quantity} = ₹${itemTotal}`);
         }

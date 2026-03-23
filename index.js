@@ -387,10 +387,12 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
       userId: userId, // Link to existing user if found, else null (to be created on payment)
       items: items.map(i => ({
         type: 'event',
-        itemId: i.id,
-        itemName: i.title,
+        itemId: i.id || i.itemId || i._id,
+        cartId: i.id || i.itemId || i._id, // 🔥 Preserve original cart ID
+        itemName: i.title || i.itemName || i.name || 'General Registration',
         price: i.price
       })),
+
       totalAmount: items.reduce((sum, i) => sum + i.price, 0),
       subtotal: items.reduce((sum, i) => sum + i.price, 0),
       paymentStatus: 'pending',
