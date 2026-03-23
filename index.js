@@ -363,6 +363,9 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
     const mainPersonGender = raw.gender;
     const mainPersonUniversity = raw.universityName;
     const mainPersonAddress = raw.address;
+    const mainPersonAge = raw.age && raw.age !== "" ? Number(raw.age) : null;
+    const mainPersonUniversityIdCard = raw.universityIdCard || "";
+    const mainPersonReferralCode = raw.referralCode || "";
 
     if (!mainPersonEmail) {
       return res.status(400).json({ success: false, message: 'Email is required' });
@@ -379,8 +382,11 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
         email: mainPersonEmail,
         contactNo: mainPersonContactNo,
         gender: mainPersonGender,
+        age: mainPersonAge,
         universityName: mainPersonUniversity,
         address: mainPersonAddress,
+        universityIdCard: mainPersonUniversityIdCard,
+        referralCode: mainPersonReferralCode,
         password: hashedPassword,
         events: items.map(i => i.title), // Store event names
         isvalidated: true
@@ -388,11 +394,15 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
       await mainPerson.save();
     } else {
       // Update existing user with provided details and events
-      mainPerson.name = mainPersonName || mainPerson.name;
-      mainPerson.contactNo = mainPersonContactNo || mainPerson.contactNo;
-      mainPerson.gender = mainPersonGender || mainPerson.gender;
-      mainPerson.universityName = mainPersonUniversity || mainPerson.universityName;
-      mainPerson.address = mainPersonAddress || mainPerson.address;
+      if (mainPersonName) mainPerson.name = mainPersonName;
+      if (mainPersonContactNo) mainPerson.contactNo = mainPersonContactNo;
+      if (mainPersonGender) mainPerson.gender = mainPersonGender;
+      if (mainPersonUniversity) mainPerson.universityName = mainPersonUniversity;
+      if (mainPersonAddress) mainPerson.address = mainPersonAddress;
+      if (mainPersonAge !== null) mainPerson.age = mainPersonAge;
+      if (mainPersonUniversityIdCard) mainPerson.universityIdCard = mainPersonUniversityIdCard;
+      if (mainPersonReferralCode) mainPerson.referralCode = mainPersonReferralCode;
+      
       mainPerson.isvalidated = true; // Mark as validated when they complete registration
 
       const newEvents = items.map(i => i.title);
@@ -430,7 +440,15 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
       userDetails: {
         name: mainPersonName,
         email: mainPersonEmail,
-        contactNo: mainPersonContactNo
+        contactNo: mainPersonContactNo,
+        gender: mainPersonGender,
+        age: mainPersonAge,
+        universityName: mainPersonUniversity,
+        address: mainPersonAddress,
+        universityIdCard: mainPersonUniversityIdCard,
+        referralCode: mainPersonReferralCode,
+        formData: raw,
+        teamMembers: raw.teamMembers ? (typeof raw.teamMembers === 'string' ? JSON.parse(raw.teamMembers) : raw.teamMembers) : null
       }
     });
     await purchase.save();

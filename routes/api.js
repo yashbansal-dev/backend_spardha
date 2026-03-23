@@ -742,17 +742,23 @@ router.post('/save-team-members', async (req, res) => {
           user = new User({
             email,
             name: member.name || "Unknown Member",
-            contactNo: member.phone || "",
+            contactNo: member.phone || member.contactNo || "",
+            gender: member.gender || "",
+            age: member.age && member.age !== "" ? Number(member.age) : null,
+            universityName: member.universityName || member.college || "",
             createdAt: new Date(),
             updatedAt: new Date()
           });
           await user.save();
           savedResults.push({ email, status: 'created' });
         } else {
-          // Update existing user if name/phone was provided and was missing
+          // Update existing user if fields were provided and were missing
           let modified = false;
           if (!user.name && member.name) { user.name = member.name; modified = true; }
-          if (!user.contactNo && member.phone) { user.contactNo = member.phone; modified = true; }
+          if (!user.contactNo && (member.phone || member.contactNo)) { user.contactNo = member.phone || member.contactNo; modified = true; }
+          if (!user.gender && member.gender) { user.gender = member.gender; modified = true; }
+          if ((user.age === null || user.age === undefined) && member.age) { user.age = Number(member.age); modified = true; }
+          if (!user.universityName && (member.universityName || member.college)) { user.universityName = member.universityName || member.college; modified = true; }
           
           if (modified) {
             user.updatedAt = new Date();

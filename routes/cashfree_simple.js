@@ -147,8 +147,10 @@ async function processPaymentSuccess(orderId, paymentData = null) {
         
         user.gender = purchase.userDetails.gender || purchase.userDetails.formData?.customerGender || user.gender || "";
         
-        const rawAge = purchase.userDetails.age || purchase.userDetails.formData?.customerAge;
-        if (rawAge) user.age = Number(rawAge);
+        const rawAge = purchase.userDetails.age || purchase.userDetails.formData?.customerAge || purchase.userDetails.formData?.age;
+        if (rawAge !== undefined && rawAge !== null && rawAge !== '') {
+            user.age = Number(rawAge);
+        }
         
         user.universityName = purchase.userDetails.universityName || purchase.userDetails.formData?.universityName || user.universityName || "";
         user.address = purchase.userDetails.address || purchase.userDetails.formData?.address || user.address || "";
@@ -264,6 +266,9 @@ async function processPaymentSuccess(orderId, paymentData = null) {
                         name: m.name,
                         email: m.email.toLowerCase().trim(),
                         contactNo: m.contactNo || m.phone || '',
+                        gender: m.gender || '',
+                        age: m.age && m.age !== "" ? Number(m.age) : null,
+                        universityName: m.universityName || m.college || '',
                         events: [eventName],
                         isvalidated: false
                     });
@@ -273,6 +278,12 @@ async function processPaymentSuccess(orderId, paymentData = null) {
                     if (!memberUser.events.includes(eventName)) {
                         memberUser.events.push(eventName);
                     }
+                    
+                    // Update field if missing
+                    if (!memberUser.contactNo && (m.contactNo || m.phone)) memberUser.contactNo = m.contactNo || m.phone;
+                    if (!memberUser.gender && m.gender) memberUser.gender = m.gender;
+                    if (!memberUser.age && m.age) memberUser.age = Number(m.age);
+                    if (!memberUser.universityName && (m.universityName || m.college)) memberUser.universityName = m.universityName || m.college;
                 }
 
                 // Add to registration history for member
@@ -289,8 +300,8 @@ async function processPaymentSuccess(orderId, paymentData = null) {
                 await memberUser.save();
                 memberObjects.push({
                     userId: memberUser._id,
-                    name: m.name,
-                    email: m.email,
+                    name: memberUser.name,
+                    email: memberUser.email,
                     role: 'member'
                 });
             }
@@ -706,8 +717,6 @@ router.post('/create-order', async (req, res) => {
             }
 
             console.log(`✅ Matched to: "${event.name}" (Price: ${event.price})`);
-
-            console.log(`✅ Found event: "${event.name}" (Price: ${event.price})`);
 
             // Trust ONLY the DB price
             const realPrice = parseFloat(event.price || 0);
