@@ -124,9 +124,22 @@ async function processPaymentSuccess(orderId, paymentData = null) {
     if (!user) {
         const normalizedEmail = purchase.userDetails.email.toLowerCase().trim();
         console.log('👤 Creating new user for email:', normalizedEmail);
+        
+        // Handle password if present in formData
+        let hashedPassword = '';
+        const rawPassword = purchase.userDetails.formData?.password;
+        if (rawPassword) {
+            const bcrypt = require('bcrypt'); // Lazy require
+            hashedPassword = await bcrypt.hash(rawPassword, 12);
+        } else {
+            const bcrypt = require('bcrypt');
+            hashedPassword = await bcrypt.hash(Math.random().toString(36), 12);
+        }
+
         user = new User({
             name: purchase.userDetails.name,
             email: normalizedEmail,
+            password: hashedPassword,
             contactNo: purchase.userDetails.contactNo || '',
             gender: purchase.userDetails.gender || '',
             age: purchase.userDetails.age || null,
@@ -139,6 +152,7 @@ async function processPaymentSuccess(orderId, paymentData = null) {
             isvalidated: true
         });
     } else {
+
         user.isvalidated = true; // ✅ Mark as validated on successful payment
         if (!user.referalID) user.referalID = shortid.generate(); // ✅ Ensure they have a referral ID
         
@@ -268,23 +282,46 @@ async function processPaymentSuccess(orderId, paymentData = null) {
                         contactNo: m.contactNo || m.phone || '',
                         gender: m.gender || '',
                         age: m.age && m.age !== "" ? Number(m.age) : null,
-                        universityName: m.universityName || m.college || '',
+                        universityName: m.universityName || m.college || user.universityName || '', // Inherit from leader
                         events: [eventName],
-                        isvalidated: false
+                        isvalidated: true // ✅ Marked as validated for paid registration
                     });
-                    await memberUser.save();
                     console.log(`      ✨ Created new user for member: ${m.email}`);
                 } else {
                     if (!memberUser.events.includes(eventName)) {
                         memberUser.events.push(eventName);
                     }
                     
+                    memberUser.isvalidated = true; // ✅ Ensure existing user is also validated
+                    
                     // Update field if missing
                     if (!memberUser.contactNo && (m.contactNo || m.phone)) memberUser.contactNo = m.contactNo || m.phone;
                     if (!memberUser.gender && m.gender) memberUser.gender = m.gender;
                     if (!memberUser.age && m.age) memberUser.age = Number(m.age);
-                    if (!memberUser.universityName && (m.universityName || m.college)) memberUser.universityName = m.universityName || m.college;
+                    if (!memberUser.universityName && (m.universityName || m.college || user.universityName)) {
+                        memberUser.universityName = m.universityName || m.college || user.universityName;
+                    }
                 }
+
+                // 🔥 GENERATE QR CODE FOR TEAM MEMBER
+                if (!memberUser.qrCodeBase64) {
+                    try {
+                        const memberQrCode = await generateUserQRCode(memberUser._id || 'temp', {
+                            name: memberUser.name,
+                            email: memberUser.email,
+                            events: memberUser.events || [eventName],
+                            orderId: orderId
+                        });
+                        memberUser.qrPath = `${memberUser._id}`;
+                        memberUser.qrCodeBase64 = memberQrCode;
+                        console.log(`      ✅ QR code generated for member: ${memberUser.email}`);
+                    } catch (qrErr) {
+                        console.error(`      ❌ Failed to generate QR for member ${memberUser.email}:`, qrErr.message);
+                    }
+                }
+                
+                await memberUser.save();
+
 
                 // Add to registration history for member
                 const memberAlreadyRegistered = memberUser.registrationHistory?.some(h => h.purchaseId?.toString() === purchase._id.toString());

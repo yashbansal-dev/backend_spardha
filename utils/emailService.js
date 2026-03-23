@@ -4,10 +4,7 @@ const { Resend } = require('resend');
 const fs = require('fs');
 const path = require('path');
 
-// Initialize Resend (Primary Provider)
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
-// Create reusable Gmail transporter (Fallback Provider)
+// Create reusable Gmail transporter (Primary Provider)
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -17,51 +14,13 @@ const transporter = nodemailer.createTransport({
 });
 
 /**
- * Shared helper to send email with Resend primary and Gmail fallback
+ * Send email using Gmail
  */
 async function sendEmailWithFallback(options) {
     const { to, subject, text, html, attachments, fromName = "Spardha'26 Team" } = options;
     const errors = [];
 
-    // 1. Try Resend (Primary)
-    if (resend) {
-        try {
-            console.log(`🚀 Attempting Resend for ${to}...`);
-            const resendFrom = process.env.RESEND_FROM_EMAIL || 'no-reply@spardha.jklu.edu.in';
-
-            // Format attachments for Resend if they exist
-            const resendAttachments = attachments ? attachments.map(att => ({
-                filename: att.filename,
-                content: att.content.toString('base64') // Resend expects base64 or Buffer
-            })) : [];
-
-            const { data, error } = await resend.emails.send({
-                from: `${fromName} <${resendFrom}>`,
-                to: [to],
-                subject: subject,
-                text: text,
-                html: html,
-                attachments: resendAttachments
-            });
-
-            if (data) {
-                console.log(`✅ Resend success: ${to}. ID: ${data.id}`);
-                return { success: true, provider: 'resend', result: data };
-            }
-            if (error) {
-                console.warn(`⚠️ Resend API returned error for ${to}:`, error);
-                errors.push({ provider: 'resend', error });
-            }
-        } catch (err) {
-            console.error(`❌ Resend exception for ${to}:`, err.message);
-            errors.push({ provider: 'resend', error: err.message });
-        }
-    } else {
-        console.log('ℹ️ Resend API Key not found, skipping primary provider.');
-    }
-
-    // 2. Fallback to Gmail
-    console.log(`🔄 Falling back to Gmail for ${to}...`);
+    console.log(`🚀 Sending Gmail for ${to}...`);
     try {
         const mailOptions = {
             from: `"${fromName}" <${process.env.EMAIL_USER}>`,
@@ -73,15 +32,16 @@ async function sendEmailWithFallback(options) {
         };
 
         const info = await transporter.sendMail(mailOptions);
-        console.log(`✅ Gmail fallback success: ${to}. ID: ${info.messageId}`);
+        console.log(`✅ Gmail success: ${to}. ID: ${info.messageId}`);
         return { success: true, provider: 'gmail', result: info };
     } catch (err) {
-        console.error(`❌ Gmail fallback also failed for ${to}:`, err.message);
+        console.error(`❌ Gmail failed for ${to}:`, err.message);
         errors.push({ provider: 'gmail', error: err.message });
     }
 
     return { success: false, errors };
 }
+
 
 /**
  * Generate registration email content

@@ -371,63 +371,20 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    // Check if main person already exists
-    let mainPerson = await User.findOne({ email: mainPersonEmail });
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: mainPersonEmail });
+    const userId = existingUser ? existingUser._id : null;
 
-    // Create new user if not exists
-    if (!mainPerson) {
-      const hashedPassword = await bcrypt.hash(password || Math.random().toString(36), 12);
-      mainPerson = new User({
-        name: mainPersonName,
-        email: mainPersonEmail,
-        contactNo: mainPersonContactNo,
-        gender: mainPersonGender,
-        age: mainPersonAge,
-        universityName: mainPersonUniversity,
-        address: mainPersonAddress,
-        universityIdCard: mainPersonUniversityIdCard,
-        referralCode: mainPersonReferralCode,
-        password: hashedPassword,
-        events: items.map(i => i.title), // Store event names
-        isvalidated: true
-      });
-      await mainPerson.save();
+    if (existingUser) {
+      console.log(`ℹ️ Existing user found for ${mainPersonEmail}. Deferring updates until payment.`);
     } else {
-      // Update existing user with provided details and events
-      if (mainPersonName) mainPerson.name = mainPersonName;
-      if (mainPersonContactNo) mainPerson.contactNo = mainPersonContactNo;
-      if (mainPersonGender) mainPerson.gender = mainPersonGender;
-      if (mainPersonUniversity) mainPerson.universityName = mainPersonUniversity;
-      if (mainPersonAddress) mainPerson.address = mainPersonAddress;
-      if (mainPersonAge !== null) mainPerson.age = mainPersonAge;
-      if (mainPersonUniversityIdCard) mainPerson.universityIdCard = mainPersonUniversityIdCard;
-      if (mainPersonReferralCode) mainPerson.referralCode = mainPersonReferralCode;
-      
-      mainPerson.isvalidated = true; // Mark as validated when they complete registration
-
-      const newEvents = items.map(i => i.title);
-      // Add only unique new events
-      const uniqueEvents = [...new Set([...(mainPerson.events || []), ...newEvents])];
-      mainPerson.events = uniqueEvents;
-      
-      await mainPerson.save();
+      console.log(`ℹ️ New user will be created for ${mainPersonEmail} only AFTER successful payment.`);
     }
 
-    // Handle Team Members (Simplified)
-    // Expecting teamMembers to be a flat array of objects if passed
-    // For now, we'll assume the frontend sends a structured list if needed, 
-    // but the Sabrang logic was very specific to its wizard. 
-    // We will trust the main person registration for now and add team logic later if specific strictly needed here.
-    // The Sabrang wizard handled team members by signature. 
-    // We'll keep it simple: just register the main user and their events.
-    // Team management can be done via separate endpoints or improved later.
-
-    console.log(`✅ User registered: ${mainPerson.email}`);
-
-    // Create Purchase Record
+    // Create Purchase Record with ALL details
     const purchase = new Purchase({
       orderId: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      userId: mainPerson._id,
+      userId: userId, // Link to existing user if found, else null (to be created on payment)
       items: items.map(i => ({
         type: 'event',
         itemId: i.id,
@@ -435,8 +392,8 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
         price: i.price
       })),
       totalAmount: items.reduce((sum, i) => sum + i.price, 0),
-      subtotal: items.reduce((sum, i) => sum + i.price, 0), // Required by schema
-      paymentStatus: 'pending', // Pending payment
+      subtotal: items.reduce((sum, i) => sum + i.price, 0),
+      paymentStatus: 'pending',
       userDetails: {
         name: mainPersonName,
         email: mainPersonEmail,
@@ -453,12 +410,15 @@ app.post("/register", authLimiter, upload.any(), async (req, res) => {
     });
     await purchase.save();
 
+    console.log(`✅ Purchase created (Pending): ${purchase.orderId} for ${mainPersonEmail}`);
+
     res.json({
       success: true,
-      message: "Registration successful. Please proceed to payment.",
+      message: "Registration data captured. Please proceed to payment.",
       orderId: purchase.orderId,
-      user: mainPerson
+      user: existingUser || { email: mainPersonEmail, name: mainPersonName } // Return basic info for frontend
     });
+
 
 
 
