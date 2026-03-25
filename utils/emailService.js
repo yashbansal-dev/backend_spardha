@@ -20,6 +20,7 @@ async function sendEmailWithFallback(options) {
     const { to, subject, text, html, attachments, fromName = "Spardha'26 Team" } = options;
     const errors = [];
 
+    // 1. Try Gmail (Primary)
     console.log(`🚀 Sending Gmail for ${to}...`);
     try {
         const mailOptions = {
@@ -37,6 +38,43 @@ async function sendEmailWithFallback(options) {
     } catch (err) {
         console.error(`❌ Gmail failed for ${to}:`, err.message);
         errors.push({ provider: 'gmail', error: err.message });
+    }
+
+    // 2. Fallback to Resend (Secondary)
+    if (process.env.RESEND_API_KEY) {
+        console.log(`🔄 Falling back to Resend for ${to}...`);
+        try {
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            
+            // Map attachments for Resend if needed
+            const resendAttachments = (attachments || []).map(att => ({
+                filename: att.filename,
+                content: att.content, // Resend SDK handles Buffer
+                cid: att.cid
+            }));
+
+            const { data, error } = await resend.emails.send({
+                from: `"${fromName}" <${process.env.RESEND_FROM_EMAIL || 'team@spardha.jklu.edu.in'}>`,
+                to: [to],
+                subject: subject,
+                text: text,
+                html: html,
+                attachments: resendAttachments
+            });
+
+            if (error) {
+                console.error(`❌ Resend failed for ${to}:`, error.message);
+                errors.push({ provider: 'resend', error: error.message });
+            } else {
+                console.log(`✅ Resend success: ${to}. ID: ${data.id}`);
+                return { success: true, provider: 'resend', result: data };
+            }
+        } catch (err) {
+            console.error(`❌ Resend exception for ${to}:`, err.message);
+            errors.push({ provider: 'resend', error: err.message });
+        }
+    } else {
+        console.warn('⚠️ Resend API Key missing - skipping fallback');
     }
 
     return { success: false, errors };

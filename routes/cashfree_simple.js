@@ -1158,12 +1158,21 @@ router.get('/success/:orderId', async (req, res) => {
                 const response = await cashfree.PGOrderFetchPayments(orderId);
                 const payments = response.data;
                 if (payments && payments.length > 0) {
-                    const latestPayment = payments[payments.length - 1];
-                    paymentStatus = latestPayment.payment_status;
-                    lastPaymentData = {
-                        transactionId: latestPayment.cf_payment_id,
-                        paymentMethod: latestPayment.payment_method
-                    };
+                    const successPayment = payments.find(p => p.payment_status === 'SUCCESS');
+                    if (successPayment) {
+                        paymentStatus = 'SUCCESS';
+                        lastPaymentData = {
+                            transactionId: successPayment.cf_payment_id,
+                            paymentMethod: successPayment.payment_method
+                        };
+                    } else {
+                        const latestPayment = payments[payments.length - 1];
+                        paymentStatus = latestPayment.payment_status;
+                        lastPaymentData = {
+                            transactionId: latestPayment.cf_payment_id,
+                            paymentMethod: latestPayment.payment_method
+                        };
+                    }
                     console.log(`🔍 Attempt ${attempt}/${MAX_RETRIES} — Cashfree status: ${paymentStatus}`);
                 } else {
                     console.log(`⚠️ Attempt ${attempt}/${MAX_RETRIES} — No payment data yet`);
